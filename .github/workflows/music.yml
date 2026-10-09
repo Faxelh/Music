@@ -1,0 +1,72 @@
+# Construit Music (SwiftUI) sur un Mac de GitHub.
+#
+# Résultat : l'artefact « Music-iPhone » contient Music.ipa, à installer avec
+# Sideloadly. Les erreurs de compilation s'affichent en rouge sur la page
+# de la construction (une capture suffit pour les corriger).
+
+name: iPhone
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Code de Music
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Le code arrive dans music-src.zip ; les corrections ponctuelles dans patch/.
+          if [ -f music-src.zip ]; then unzip -o -q music-src.zip; fi
+          if [ -d patch ]; then cp -R patch/. .; fi
+          ls ios ios/Sources
+
+      - name: Projet Xcode
+        shell: bash
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Compiler pour iPhone et créer Music.ipa
+        shell: bash
+        run: |
+          # GitHub lance bash avec -e : on le retire pour pouvoir afficher les erreurs.
+          set +e -u -o pipefail
+          cd ios
+          xcodebuild -project Music.xcodeproj -scheme Music -configuration Release -sdk iphoneos \
+            -destination "generic/platform=iOS" -derivedDataPath build/device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > ../xcodebuild.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            grep -E "error:" ../xcodebuild.log | sed "s#$GITHUB_WORKSPACE/##g" | sort -u | head -40 > ../erreurs.txt
+            echo "===== ERREURS DE COMPILATION ====="
+            cat ../erreurs.txt
+            { echo "## Erreurs de compilation"; echo '```'; cat ../erreurs.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            while IFS= read -r line; do
+              echo "::error title=Compilation::${line:0:900}"
+            done < ../erreurs.txt
+            tail -n 80 ../xcodebuild.log
+            exit 1
+          fi
+          APP=build/device/Build/Products/Release-iphoneos/Music.app
+          test -d "$APP"
+          rm -rf Payload ../Music.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry ../Music.ipa Payload
+          ls -lh ../Music.ipa
+          echo "- Music.ipa : $(du -h ../Music.ipa | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier Music.ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-iPhone
+          path: Music.ipa
+          retention-days: 30
