@@ -1,0 +1,53 @@
+# Projet Xcode de Music (SwiftUI pur). Généré sur le Mac de GitHub : `xcodegen generate`.
+name: Music
+options:
+  bundleIdPrefix: com.faxel
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Music:
+    type: application
+    platform: iOS
+    scheme: {}
+    sources:
+      - path: Sources
+      - path: Resources
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: "Music"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        ITSAppUsesNonExemptEncryption: false
+        UIBackgroundModes: [audio]
+        LSApplicationQueriesSchemes: [shareddocuments]
+        NSSpeechRecognitionUsageDescription: "Music écoute le morceau pour générer ses paroles automatiquement."
+        NSLocalNetworkUsageDescription: "Music reçoit les musiques envoyées depuis votre ordinateur par Wi-Fi (Transfert Wi-Fi)."
+        NSAppleMusicUsageDescription: "Music affiche et lit les morceaux déjà présents dans l'app Musique de votre iPhone."
+        NSPhotoLibraryUsageDescription: "Music utilise vos photos pour personnaliser votre profil, le lecteur et les pochettes."
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: "Audio"
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.audio, public.mp3, public.mpeg-4-audio, com.apple.m4a-audio, org.xiph.flac, com.microsoft.waveform-audio, public.aiff-audio]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.faxel.music
+        PRODUCT_NAME: Music
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_BITCODE: NO
+        DEAD_CODE_STRIPPING: YES
