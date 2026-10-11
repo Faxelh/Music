@@ -1,0 +1,121 @@
+# Construit Music pour Android sur un serveur de GitHub.
+#
+# Publie aussi l'APK dans « Releases » : l'app propose la mise à jour toute seule.
+# Résultat : l'artefact « Music-Android » contient Music.apk, à installer
+# directement sur le téléphone. Les erreurs de compilation s'affichent en
+# rouge sur la page de la construction (une capture suffit pour les corriger).
+
+name: Music – Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: music-apk
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Code de Music
+        shell: bash
+        run: |
+          # Le code est dans le dépôt (déballé depuis le zip par « Déballer le zip »).
+          if [ -d patch ]; then cp -R patch/. .; fi
+          test -d android/app || { echo "::error title=Code introuvable::Dossier android/app absent du dépôt."; exit 1; }
+          ls android android/app
+
+      # Version affichée : contenu du fichier VERSION (ex. 2026.1) + nombre de mises à jour
+      # depuis sa dernière modification → 2026.1.0, 2026.1.1… Numéro de compilation : minutes
+      # écoulées depuis 1970 (il augmente toujours : l'app sait si une version est plus récente).
+      - name: Calculer la version
+        shell: bash
+        run: |
+          BASE=$(head -n 1 "$GITHUB_WORKSPACE/VERSION" 2>/dev/null | tr -d '[:space:]')
+          BASE=${BASE:-2026.1}
+          DEPUIS=$(git -C "$GITHUB_WORKSPACE" log -1 --format=%H -- VERSION)
+          if [ -n "$DEPUIS" ]; then N=$(git -C "$GITHUB_WORKSPACE" rev-list --count "$DEPUIS"..HEAD); else N=0; fi
+          echo "APP_VERSION=$BASE.$N" >> "$GITHUB_ENV"
+          echo "APP_BUILD=$(( $(date -u +%s) / 60 ))" >> "$GITHUB_ENV"
+          echo "Version : $BASE.$N"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Le SDK Android est déjà installé sur la machine de GitHub : on accepte juste ses licences.
+      - name: SDK Android
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SDKM=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1)
+          echo "sdkmanager : $SDKM"
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null 2>&1 || true
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Compiler et créer Music.apk
+        shell: bash
+        run: |
+          set +e -u -o pipefail
+          cd android
+          gradle assembleRelease --no-daemon --stacktrace > ../gradle.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            grep -E "^e: |error:|ERROR:|What went wrong" -A2 ../gradle.log | sed "s#file://$GITHUB_WORKSPACE/##g; s#$GITHUB_WORKSPACE/##g" | head -60 > ../erreurs.txt
+            echo "===== ERREURS DE COMPILATION ====="
+            cat ../erreurs.txt
+            { echo "## Erreurs de compilation"; echo '```'; cat ../erreurs.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            grep -E "^e: " ../gradle.log | sed "s#file://$GITHUB_WORKSPACE/##g" | head -30 | while IFS= read -r line; do
+              echo "::error title=Compilation::${line:0:900}"
+            done
+            tail -n 60 ../gradle.log
+            exit 1
+          fi
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" ../Music.apk
+          ls -lh ../Music.apk
+          echo "- Music.apk : $(du -h ../Music.apk | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier Music.apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-Android
+          path: Music.apk
+          retention-days: 30
+
+      # Publie l'APK dans « Releases » : Music la trouve et propose la mise à jour toute seule.
+      - name: Publier la mise à jour
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPOT: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -e
+          if gh release view "android-$APP_BUILD" --repo "$DEPOT" > /dev/null 2>&1; then
+            echo "La version android-$APP_BUILD est déjà publiée."; exit 0
+          fi
+          gh release create "android-$APP_BUILD" Music.apk \
+            --repo "$DEPOT" --title "Music Android $APP_VERSION" \
+            --notes "$(git log -1 --pretty=%s)" --target "${{ github.sha }}"
+          gh release list --repo "$DEPOT" --limit 100 --json tagName -q '.[].tagName' \
+            | grep -E '^android-[0-9]+$' | sort -t- -k2 -n -r | tail -n +6 \
+            | xargs -r -I{} gh release delete {} --repo "$DEPOT" --yes --cleanup-tag || true
+          echo "- Publié : Music $APP_VERSION (android-$APP_BUILD)" >> "$GITHUB_STEP_SUMMARY"

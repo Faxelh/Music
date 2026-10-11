@@ -1,0 +1,52 @@
+# Mises à jour en un geste : déposez music-src.zip à la racine du dépôt
+# (Add file › Upload files). Ce workflow le décompresse, enregistre les fichiers,
+# supprime le zip, puis lance les compilations iPhone et Android. Chaque compilation
+# publie la nouvelle version dans « Releases » : Music la propose toute seule.
+name: Déballer le zip
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  deballer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Décompresser et remplacer les fichiers
+        shell: bash
+        run: |
+          set -e
+          ZIP=$(ls -t *.zip 2>/dev/null | head -n 1)
+          if [ -z "$ZIP" ]; then echo "Aucun zip à la racine."; exit 0; fi
+          echo "Zip trouvé : $ZIP"
+          rm -rf /tmp/zip && mkdir -p /tmp/zip && unzip -q -o "$ZIP" -d /tmp/zip
+          SRC=/tmp/zip
+          # Zip refait sur Windows avec un dossier en plus : on prend son contenu.
+          if [ "$(ls -A $SRC | wc -l)" = "1" ] && [ -d "$SRC/$(ls -A $SRC)" ] && [ ! -d "$SRC/ios" ] && [ ! -d "$SRC/android" ]; then
+            SRC="$SRC/$(ls -A $SRC)"
+          fi
+          # GitHub interdit aux workflows de modifier les workflows : le dossier .github est ignoré.
+          rsync -a --exclude ".git" --exclude ".github" "$SRC"/ ./
+          git rm -q --cached *.zip 2>/dev/null || true
+          rm -f *.zip
+          git config user.name "music-bot"
+          git config user.email "music-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "Rien de nouveau."; else git commit -q -m "Mise à jour depuis $ZIP"; fi
+          git push
+
+      - name: Lancer les compilations iPhone et Android
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run music.yml --ref main || true
+          gh workflow run music-android.yml --ref main || true

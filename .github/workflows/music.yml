@@ -1,29 +1,58 @@
-# Construit Music (SwiftUI) sur un Mac de GitHub.
+# Construit Music pour iPhone sur un Mac de GitHub, puis publie la mise à jour.
 #
-# Résultat : l'artefact « Music-iPhone » contient Music.ipa, à installer avec
-# Sideloadly. Les erreurs de compilation s'affichent en rouge sur la page
-# de la construction (une capture suffit pour les corriger).
+# Résultat : Music.ipa dans les artefacts ET dans « Releases » ; Music propose
+# la nouvelle version toute seule (SideStore / AltStore, ou IPA pour Sideloadly).
+# Les erreurs de compilation s'affichent en rouge sur la page de la construction.
 
-name: iPhone
+name: Music – iPhone
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "android/**"
+      - "*.zip"
+      - ".github/**"
+      - "README.md"
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Une nouvelle compilation arrête la précédente (pas de doublons).
+concurrency:
+  group: music-ipa
+  cancel-in-progress: true
 
 jobs:
   ios:
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Version affichée : contenu du fichier VERSION (ex. 2026.1) + nombre de mises à jour
+      # depuis sa dernière modification → 2026.1.0, 2026.1.1… Numéro de compilation : minutes
+      # écoulées depuis 1970 (il augmente toujours : l'app sait si une version est plus récente).
+      - name: Calculer la version
+        shell: bash
+        run: |
+          BASE=$(head -n 1 "$GITHUB_WORKSPACE/VERSION" 2>/dev/null | tr -d '[:space:]')
+          BASE=${BASE:-2026.1}
+          DEPUIS=$(git -C "$GITHUB_WORKSPACE" log -1 --format=%H -- VERSION)
+          if [ -n "$DEPUIS" ]; then N=$(git -C "$GITHUB_WORKSPACE" rev-list --count "$DEPUIS"..HEAD); else N=0; fi
+          echo "APP_VERSION=$BASE.$N" >> "$GITHUB_ENV"
+          echo "APP_BUILD=$(( $(date -u +%s) / 60 ))" >> "$GITHUB_ENV"
+          echo "Version : $BASE.$N"
+
 
       - name: Code de Music
         shell: bash
         run: |
           set -euo pipefail
-          # Le code arrive dans music-src.zip ; les corrections ponctuelles dans patch/.
-          if [ -f music-src.zip ]; then unzip -o -q music-src.zip; fi
+          # Le code est dans le dépôt (déballé depuis le zip par « Déballer le zip »).
           if [ -d patch ]; then cp -R patch/. .; fi
           ls ios ios/Sources
 
@@ -42,6 +71,7 @@ jobs:
           xcodebuild -project Music.xcodeproj -scheme Music -configuration Release -sdk iphoneos \
             -destination "generic/platform=iOS" -derivedDataPath build/device \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$APP_BUILD" \
             build > ../xcodebuild.log 2>&1
           STATUS=$?
           if [ $STATUS -ne 0 ]; then
@@ -70,3 +100,59 @@ jobs:
           name: Music-iPhone
           path: Music.ipa
           retention-days: 30
+
+      # Publie l'IPA dans « Releases » (Music signale la nouvelle version) et met à jour
+      # la source SideStore / AltStore pour les mises à jour automatiques.
+      - name: Publier la mise à jour
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPOT: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -e
+          NUMERO=$APP_BUILD
+          if gh release view "ios-$NUMERO" --repo "$DEPOT" > /dev/null 2>&1; then
+            echo "La version ios-$NUMERO est déjà publiée."; exit 0
+          fi
+          gh release create "ios-$NUMERO" Music.ipa \
+            --repo "$DEPOT" --title "Music iPhone $APP_VERSION" \
+            --notes "$(git log -1 --pretty=%s)" --target "${{ github.sha }}"
+          TAILLE=$(stat -f%z Music.ipa)
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          BASE="https://github.com/$DEPOT/releases/download"
+          mkdir -p maj
+          cat > maj/source.json <<JSON
+          {
+            "name": "Music",
+            "identifier": "com.faxel.music.source",
+            "subtitle": "Lecteur de musique",
+            "apps": [{
+              "name": "Music",
+              "bundleIdentifier": "com.faxel.music",
+              "developerName": "Faxel Kwadio",
+              "subtitle": "Lecteur de musique",
+              "localizedDescription": "Lecteur de musique",
+              "iconURL": "$BASE/ios-source/icone.png",
+              "tintColor": "7C5CFF",
+              "versions": [{
+                "version": "$APP_VERSION",
+                "buildVersion": "$NUMERO",
+                "date": "$DATE",
+                "downloadURL": "$BASE/ios-$NUMERO/Music.ipa",
+                "size": $TAILLE,
+                "minOSVersion": "16.0"
+              }]
+            }],
+            "news": []
+          }
+          JSON
+          cp "ios/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png" maj/icone.png
+          gh release delete ios-source --repo "$DEPOT" --yes --cleanup-tag || true
+          gh release create ios-source maj/source.json maj/icone.png \
+            --repo "$DEPOT" --title "Source SideStore / AltStore" --latest=false \
+            --notes "Ajoutez cette adresse dans SideStore ou AltStore : $BASE/ios-source/source.json"
+          # On garde seulement les 5 dernières versions iPhone.
+          gh release list --repo "$DEPOT" --limit 100 --json tagName -q '.[].tagName' \
+            | grep -E '^ios-[0-9]+$' | sort -t- -k2 -n -r | tail -n +6 \
+            | xargs -I{} gh release delete {} --repo "$DEPOT" --yes --cleanup-tag || true
+          echo "- Publié : Music $APP_VERSION (ios-$NUMERO)" >> "$GITHUB_STEP_SUMMARY"
