@@ -38,19 +38,21 @@ jobs:
           test -d android/app || { echo "::error title=Code introuvable::Dossier android/app absent du dépôt."; exit 1; }
           ls android android/app
 
-      # Version affichée : contenu du fichier VERSION (ex. 2026.1) + nombre de mises à jour
-      # depuis sa dernière modification → 2026.1.0, 2026.1.1… Numéro de compilation : minutes
-      # écoulées depuis 1970 (il augmente toujours : l'app sait si une version est plus récente).
+      # Version automatique : Année.Mois.N — N = numéro de la mise à jour dans le mois
+      # (1re mise à jour d'octobre 2026 → 2026.10.1, puis 2026.10.2…, et 2026.11.1 le mois suivant).
+      # Numéro de compilation : minutes écoulées depuis 1970 (il augmente toujours).
       - name: Calculer la version
         shell: bash
         run: |
-          BASE=$(head -n 1 "$GITHUB_WORKSPACE/VERSION" 2>/dev/null | tr -d '[:space:]')
-          BASE=${BASE:-2026.1}
-          DEPUIS=$(git -C "$GITHUB_WORKSPACE" log -1 --format=%H -- VERSION)
-          if [ -n "$DEPUIS" ]; then N=$(git -C "$GITHUB_WORKSPACE" rev-list --count "$DEPUIS"..HEAD); else N=0; fi
-          echo "APP_VERSION=$BASE.$N" >> "$GITHUB_ENV"
+          ANNEE=$(date -u +%Y)
+          MOIS=$(date -u +%-m)
+          DEBUT=$(date -u +%Y-%m-01T00:00:00Z)
+          # Chaque mise à jour envoyée (zip) est un commit : on compte ceux du mois en cours.
+          N=$(git -C "$GITHUB_WORKSPACE" rev-list --count --since="$DEBUT" HEAD)
+          [ "$N" -ge 1 ] 2>/dev/null || N=1
+          echo "APP_VERSION=$ANNEE.$MOIS.$N" >> "$GITHUB_ENV"
           echo "APP_BUILD=$(( $(date -u +%s) / 60 ))" >> "$GITHUB_ENV"
-          echo "Version : $BASE.$N"
+          echo "Version : $ANNEE.$MOIS.$N"
 
       - uses: actions/setup-java@v5
         with:
