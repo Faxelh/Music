@@ -91,6 +91,10 @@ final class AudioEngine: NSObject, ObservableObject {
     /// Le moteur doit être relancé proprement à la prochaine lecture (app passée en arrière-plan,
     /// interruption…) : iOS peut le laisser « en marche » sans plus produire de son.
     private var needsRestart = false
+    /// Fondu doux à la pause et à la reprise (pas de « clic », pas de coupure sèche).
+    private var fadeTimer: Timer?
+    private var fadeToken = 0
+    private var fadeStep = 0
     private var sleepTimer: Timer?
     /// La musique jouait quand un appel (ou une alarme) l'a coupée.
     private var resumeAfterInterruption = false
@@ -235,6 +239,12 @@ final class AudioEngine: NSObject, ObservableObject {
     }
 
     private func didStartPlaying() {
+        if UIApplication.shared.applicationState == .active {
+            engine.mainMixerNode.outputVolume = 0
+            fade(to: 1, duration: 0.25)
+        } else {
+            cancelFade()
+        }
         isPlaying = true
         currentTime = pausedTime
         recoveryFailures = 0
@@ -256,11 +266,52 @@ final class AudioEngine: NSObject, ObservableObject {
         pausedTime = position()
         AudioLog.add("Pause · t=\(Int(pausedTime))s")
         currentTime = pausedTime
-        node.pause()
         isPlaying = false
         stopClock()
         updateNowPlaying()
         saveState()
+        if UIApplication.shared.applicationState == .active && engine.isRunning {
+            fade(to: 0, duration: 0.2) { [weak self] in
+                guard let self = self, !self.isPlaying else { return }
+                self.node.pause()
+            }
+        } else {
+            cancelFade()
+            node.pause()
+        }
+    }
+
+    private func cancelFade() {
+        fadeToken += 1
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        engine.mainMixerNode.outputVolume = 1
+    }
+
+    private func fade(to target: Float, duration: Double, completion: (() -> Void)? = nil) {
+        fadeTimer?.invalidate()
+        fadeToken += 1
+        let token = fadeToken
+        let mixer = engine.mainMixerNode
+        let start = mixer.outputVolume
+        let steps = 10
+        fadeStep = 0
+        let timer = Timer(timeInterval: duration / Double(steps), repeats: true) { [weak self] timer in
+            guard let self = self, self.fadeToken == token else {
+                timer.invalidate()
+                return
+            }
+            self.fadeStep += 1
+            let step = self.fadeStep
+            mixer.outputVolume = start + (target - start) * Float(step) / Float(steps)
+            if step >= steps {
+                timer.invalidate()
+                self.fadeTimer = nil
+                completion?()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fadeTimer = timer
     }
 
     func next() {
@@ -389,6 +440,7 @@ final class AudioEngine: NSObject, ObservableObject {
     // MARK: - Moteur
 
     private func load(play: Bool, at time: Double = 0) {
+        cancelFade()
         AudioLog.add("Chargement · lecture=\(play) · t=\(Int(time))s · n°\(index + 1)")
         guard let song = current else { return }
         if song.isIpod && !FileManager.default.fileExists(atPath: song.url.path) {
@@ -661,6 +713,7 @@ final class AudioEngine: NSObject, ObservableObject {
             updateNowPlaying()
             return
         }
+        cancelFade()
         activateSession()
         if startEngine() {
             node.play()

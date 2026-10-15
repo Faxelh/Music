@@ -47,9 +47,19 @@ object MusicRepository {
     fun refresh() {
         scope.launch {
             val found = withContext(Dispatchers.IO) { query() }
+            val (groupedAlbums, groupedArtists) = withContext(Dispatchers.Default) {
+                val a = found.groupBy { it.albumId }.map { (id, list) ->
+                    Album(id, list.first().album.ifBlank { "—" }, list.first().displayArtist, list.sortedBy { it.track })
+                }.sortedBy { it.title.lowercase() }
+                val b = found.filter { it.hasArtist }.groupBy { it.artist }.map { (name, list) -> Artist(name, list) }
+                    .sortedBy { it.name.lowercase() }
+                a to b
+            }
             byId.clear()
             found.forEach { byId[it.id] = it }
             songs = found
+            albums = groupedAlbums
+            artists = groupedArtists
             loaded = true
         }
     }
@@ -103,14 +113,19 @@ object MusicRepository {
         return result
     }
 
-    val albums: List<Album>
-        get() = songs.groupBy { it.albumId }.map { (id, list) ->
-            Album(id, list.first().album.ifBlank { "—" }, list.first().displayArtist, list.sortedBy { it.track })
-        }.sortedBy { it.title.lowercase() }
+    /** Albums et artistes calculés une seule fois par scan (listes fluides, même avec des milliers de morceaux). */
+    var albums by mutableStateOf<List<Album>>(emptyList())
+        private set
+    var artists by mutableStateOf<List<Artist>>(emptyList())
+        private set
 
-    val artists: List<Artist>
-        get() = songs.filter { it.hasArtist }.groupBy { it.artist }.map { (name, list) -> Artist(name, list) }
+    private fun group(list: List<Song>) {
+        albums = list.groupBy { it.albumId }.map { (id, songs) ->
+            Album(id, songs.first().album.ifBlank { "—" }, songs.first().displayArtist, songs.sortedBy { it.track })
+        }.sortedBy { it.title.lowercase() }
+        artists = list.filter { it.hasArtist }.groupBy { it.artist }.map { (name, songs) -> Artist(name, songs) }
             .sortedBy { it.name.lowercase() }
+    }
 
     // MARK: Favoris, playlists, écoutes
 
@@ -206,6 +221,7 @@ object MusicRepository {
     fun forget(song: Song) {
         byId.remove(song.id)
         songs = songs.filter { it.id != song.id }
+        group(songs)
         favorites = favorites - song.id
         recent = recent.filter { it != song.id }
         playlists = playlists.map { it.copy(songIds = it.songIds - song.id) }

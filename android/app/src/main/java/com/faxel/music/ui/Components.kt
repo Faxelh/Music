@@ -49,7 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import com.faxel.music.R
 import com.faxel.music.data.MusicRepository
 import com.faxel.music.data.Song
@@ -76,13 +76,11 @@ fun Artwork(song: Song?, size: Dp, shape: Shape = RoundedCornerShape(8.dp), modi
     ) {
         Icon(Icons.Rounded.MusicNote, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(size * 0.4f))
         if (song != null) {
-            SubcomposeAsyncImage(
+            AsyncImage(
                 model = song.artUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                error = {},
-                loading = {},
             )
         }
     }

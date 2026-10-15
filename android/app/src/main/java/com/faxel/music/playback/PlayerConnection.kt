@@ -46,6 +46,29 @@ object PlayerConnection {
         sleepEnd = null
     }
 
+    private val fadeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var fadeToken = 0
+
+    /** Fondu doux du volume (pause et reprise sans coupure sèche). */
+    private fun fade(from: Float, to: Float, durationMs: Long = 220, done: () -> Unit = {}) {
+        val c = controller ?: return done()
+        val token = ++fadeToken
+        val steps = 10
+        c.volume = from
+        for (i in 1..steps) {
+            fadeHandler.postDelayed({
+                if (token != fadeToken) return@postDelayed
+                controller?.volume = from + (to - from) * i / steps
+                if (i == steps) done()
+            }, durationMs * i / steps)
+        }
+    }
+
+    private fun cancelFade() {
+        fadeToken++
+        controller?.volume = 1f
+    }
+
     val current: Song? get() = currentId?.let { MusicRepository.song(it) }
     val queue: List<Song> get() = queueIds.mapNotNull { MusicRepository.song(it) }
 
@@ -110,6 +133,7 @@ object PlayerConnection {
     fun play(songs: List<Song>, start: Int = 0, shuffled: Boolean = false) {
         val c = controller ?: return
         if (songs.isEmpty()) return
+        cancelFade()
         c.shuffleModeEnabled = shuffled
         c.setMediaItems(songs.map { item(it) }, if (shuffled) (songs.indices).random() else start.coerceIn(songs.indices), 0L)
         c.prepare()
@@ -118,10 +142,17 @@ object PlayerConnection {
 
     fun toggle() {
         val c = controller ?: return
-        if (c.isPlaying) c.pause() else {
+        if (c.isPlaying) {
+            fade(c.volume, 0f) {
+                controller?.pause()
+                controller?.volume = 1f
+            }
+        } else {
             if (c.playbackState == Player.STATE_IDLE) c.prepare()
             if (c.playbackState == Player.STATE_ENDED) c.seekTo(0)
+            c.volume = 0f
             c.play()
+            fade(0f, 1f, 260)
         }
     }
 
