@@ -87,6 +87,8 @@ struct UserData: Codable {
     var playCounts: [String: Int] = [:]
     var lastPlayed: [String: Double] = [:]
     var customArtwork: [String] = []
+    /// Secondes écoutées par jour (« 2026-10-15 » → 1830).
+    var listenDays: [String: Double]? = nil
 }
 
 /// Un dossier de l'app Fichiers relié à Music (ex. Sur mon iPhone › Faxel).
@@ -111,6 +113,7 @@ enum LibraryRoute: Hashable, Codable {
 }
 
 enum AppTab: String, Hashable {
+    /// `search` est l'onglet « Découvrir » (la recherche s'ouvre depuis sa barre).
     case home, library, search, settings
 }
 

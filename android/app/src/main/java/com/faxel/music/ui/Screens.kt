@@ -97,9 +97,15 @@ fun HomeScreen(nav: Navigator, onOpenPlayer: () -> Unit) {
     val name = Settings.userName.value
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Column(Modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Text(if (name.isBlank()) greeting else "$greeting, $name", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Text(pluralStringResource(R.plurals.songs_count, songs.size, songs.size), color = Color.Gray, fontSize = 15.sp)
+            Row(Modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (name.isBlank()) greeting else "$greeting, $name", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text(pluralStringResource(R.plurals.songs_count, songs.size, songs.size), color = Color.Gray, fontSize = 15.sp)
+                }
+                IconButton(
+                    onClick = { nav.open(Route.Search) },
+                    modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFF1C1C21)),
+                ) { Icon(Icons.Rounded.Search, null, tint = Color.White) }
             }
         }
         if (songs.isEmpty()) {
@@ -302,6 +308,7 @@ fun RouteScreen(route: Route, nav: Navigator) {
         Route.Favorites -> SongListPage(stringResource(R.string.favorites), MusicRepository.favoriteSongs, nav)
         Route.Recent -> SongListPage(stringResource(R.string.recent), MusicRepository.recentSongs, nav)
         Route.MostPlayed -> SongListPage(stringResource(R.string.most_played), MusicRepository.mostPlayed, nav)
+        Route.Search -> SearchScreen(nav)
         is Route.AlbumDetail -> {
             val album = MusicRepository.albums.firstOrNull { it.id == route.id }
             if (album == null) GoBack(nav) else CollectionPage(album.title, album.artist, album.songs, nav, numbered = true)
@@ -603,7 +610,12 @@ fun SearchScreen(nav: Navigator) {
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.statusBarsPadding().padding(16.dp)) {
-                Text(stringResource(R.string.tab_search), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { nav.back() }) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(stringResource(R.string.tab_search), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                }
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, singleLine = true,

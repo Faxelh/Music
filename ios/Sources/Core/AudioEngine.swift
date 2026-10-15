@@ -51,6 +51,16 @@ final class AudioEngine: NSObject, ObservableObject {
     @Published var repeatMode: RepeatMode = .off
     @Published private(set) var rate: Float = 1
     @Published private(set) var sleepEnd: Date?
+    /// Minuteur « fin du morceau » : pause à la fin du titre en cours.
+    @Published private(set) var sleepAtEnd = false
+    /// Tonalité en demi-tons (-6…+6), indépendante de la vitesse.
+    @Published private(set) var semitones: Float = 0
+    /// Boucle A–B (en secondes) sur le morceau en cours.
+    @Published private(set) var loopA: Double?
+    @Published private(set) var loopB: Double?
+    private var loopSongID: String?
+    /// Temps d'écoute pas encore enregistré (statistiques de « Découvrir »).
+    private var pendingListen: Double = 0
     /// Moment du dernier relevé de currentTime (animations fluides entre deux relevés).
     private(set) var timeStamp: Date {
         get { clock.timeStamp }
@@ -268,6 +278,7 @@ final class AudioEngine: NSObject, ObservableObject {
         currentTime = pausedTime
         isPlaying = false
         stopClock()
+        flushListening()
         updateNowPlaying()
         saveState()
         if UIApplication.shared.applicationState == .active && engine.isRunning {
@@ -409,6 +420,50 @@ final class AudioEngine: NSObject, ObservableObject {
         updateNowPlaying()
     }
 
+    /// Change la tonalité sans toucher à la vitesse (karaoké, transposition).
+    func setPitch(semitones value: Float) {
+        let clamped = max(-6, min(6, value))
+        semitones = clamped
+        pitch.pitch = clamped * 100
+    }
+
+    /// Boucle A–B : 1er appui = A, 2e = B, 3e = arrêt de la boucle.
+    func cycleLoop() {
+        let now = position()
+        if loopA == nil {
+            loopA = now
+            loopB = nil
+        } else if loopB == nil {
+            guard let a = loopA else { return }
+            if now <= a + 1 {
+                // B trop près (ou avant) A : on reprend A ici.
+                loopA = now
+                return
+            }
+            loopB = now
+            seek(to: a)
+        } else {
+            clearLoop()
+        }
+    }
+
+    func clearLoop() {
+        loopA = nil
+        loopB = nil
+    }
+
+    /// Format du fichier en cours (fiche d'informations).
+    var fileFormatInfo: (sampleRate: Double, channels: Int)? {
+        guard let file = file else { return nil }
+        return (file.fileFormat.sampleRate, Int(file.fileFormat.channelCount))
+    }
+
+    private func flushListening() {
+        guard pendingListen >= 1 else { return }
+        LibraryStore.shared.addListening(seconds: pendingListen)
+        pendingListen = 0
+    }
+
     func stop() {
         generation += 1
         node.stop()
@@ -443,6 +498,13 @@ final class AudioEngine: NSObject, ObservableObject {
         cancelFade()
         AudioLog.add("Chargement · lecture=\(play) · t=\(Int(time))s · n°\(index + 1)")
         guard let song = current else { return }
+        if loopSongID != song.id {
+            loopSongID = song.id
+            if loopA != nil || loopB != nil {
+                loopA = nil
+                loopB = nil
+            }
+        }
         if song.isIpod && !FileManager.default.fileExists(atPath: song.url.path) {
             // Morceau de l'app Musique : Music en prépare d'abord une copie lisible.
             generation += 1
@@ -579,6 +641,25 @@ final class AudioEngine: NSObject, ObservableObject {
             LibraryStore.shared.recordPlay(song)
             countedPlay = true
         }
+        if sleepAtEnd {
+            // Minuteur « fin du morceau » : on s'arrête ici, prêt sur le titre suivant.
+            sleepAtEnd = false
+            isPlaying = false
+            stopClock()
+            flushListening()
+            if index + 1 < queue.count && repeatMode != .one {
+                index += 1
+                load(play: false)
+            } else {
+                schedule(from: 0)
+                pausedTime = 0
+                currentTime = 0
+                updateNowPlaying()
+                saveState()
+            }
+            onMessage?(L("Minuteur de sommeil : lecture mise en pause."))
+            return
+        }
         if repeatMode == .one {
             schedule(from: 0)
             pausedTime = 0
@@ -611,6 +692,15 @@ final class AudioEngine: NSObject, ObservableObject {
                 return
             }
             self.currentTime = self.position()
+            if self.node.isPlaying {
+                self.pendingListen += 0.25
+                if self.pendingListen >= 30 { self.flushListening() }
+            }
+            // Boucle A–B : retour au point A.
+            if let a = self.loopA, let b = self.loopB, self.currentTime >= b {
+                self.seek(to: a)
+                return
+            }
             // Fin du morceau détectée par la position (au cas où iOS n'envoie pas le rappel).
             if self.duration > 1, self.currentTime >= self.duration - 0.05, self.node.isPlaying {
                 AudioLog.add("Fin du morceau n°\(self.index + 1) (position)")
@@ -851,12 +941,34 @@ final class AudioEngine: NSObject, ObservableObject {
         sleepTimer?.invalidate()
         sleepTimer = nil
         sleepEnd = nil
+        sleepAtEnd = false
+        if minutes < 0 {
+            // -1 : pause à la fin du morceau en cours.
+            sleepAtEnd = true
+            return
+        }
         guard minutes > 0 else { return }
         sleepEnd = Date().addingTimeInterval(Double(minutes) * 60)
-        sleepTimer = Timer.scheduledTimer(withTimeInterval: Double(minutes) * 60, repeats: false) { [weak self] _ in
-            self?.pause()
-            self?.sleepEnd = nil
-            self?.onMessage?(L("Minuteur de sommeil : lecture mise en pause."))
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: Double(minutes) * 60, repeats: false) { [weak self] fired in
+            guard let self = self else { return }
+            self.sleepEnd = nil
+            // Le son baisse doucement pendant 6 s avant la pause (pas de réveil en sursaut).
+            guard self.isPlaying, self.engine.isRunning else {
+                self.pause()
+                return
+            }
+            self.fade(to: 0, duration: 6) { [weak self] in
+                guard let self = self, self.isPlaying else { return }
+                self.pause()
+                self.onMessage?(L("Minuteur de sommeil : lecture mise en pause."))
+            }
+            // Le fondu peut être annulé (morceau suivant qui se charge…) : la pause a lieu quand même.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6.5) { [weak self] in
+                guard let self = self, self.isPlaying, self.sleepTimer === fired else { return }
+                self.sleepTimer = nil
+                self.pause()
+                self.onMessage?(L("Minuteur de sommeil : lecture mise en pause."))
+            }
         }
     }
 
@@ -870,6 +982,7 @@ final class AudioEngine: NSObject, ObservableObject {
     }
 
     func saveForBackground() {
+        flushListening()
         saveState()
     }
 

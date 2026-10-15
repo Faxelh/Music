@@ -254,8 +254,18 @@ struct SongMenu: View {
     @EnvironmentObject var library: LibraryStore
     @EnvironmentObject var sheets: SheetCenter
     let song: Song
+    /// Dans le lecteur, Radio et Informations sont déjà dans la section « Lecture ».
+    var inPlayer = false
 
     var body: some View {
+        if !inPlayer {
+            Button {
+                player.play(library.radio(for: song))
+                AppState.shared.show(L("Radio : {title}", ["title": song.title]), .ok)
+            } label: {
+                Label(L("Radio de ce morceau"), systemImage: "dot.radiowaves.left.and.right")
+            }
+        }
         Button {
             player.playNext(song)
             AppState.shared.show(L("Lu ensuite : {title}", ["title": song.title]), .ok)
@@ -293,6 +303,13 @@ struct SongMenu: View {
         } label: {
             Label(L("Paroles"), systemImage: "quote.bubble")
         }
+        if !inPlayer {
+            Button {
+                sheets.infoFor = song
+            } label: {
+                Label(L("Informations"), systemImage: "info.circle")
+            }
+        }
         if !song.isIpod {
             ShareLink(item: song.url) {
                 Label(L("Partager"), systemImage: "square.and.arrow.up")
@@ -314,6 +331,7 @@ final class SheetCenter: ObservableObject {
     @Published var artworkFor: Song?
     @Published var lyricsFor: Song?
     @Published var deleting: Song?
+    @Published var infoFor: Song?
 }
 
 // MARK: - Tuiles
@@ -565,6 +583,12 @@ struct SharedSheets: ViewModifier {
             .sheet(isPresented: Binding(get: { sheets.addToPlaylist != nil }, set: { if !$0 { sheets.addToPlaylist = nil } })) {
                 PlaylistPicker(songs: sheets.addToPlaylist ?? [])
                     .environmentObject(library)
+            }
+            .sheet(item: $sheets.infoFor) { song in
+                TrackInfoView(song: song)
+                    .environmentObject(library)
+                    .environmentObject(player)
+                    .presentationDetents([.medium, .large])
             }
             .sheet(item: $sheets.lyricsFor) { song in
                 LyricsEditorView(song: song)

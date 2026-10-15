@@ -8,6 +8,7 @@ struct HomeView: View {
     @EnvironmentObject var app: AppState
     @ObservedObject private var appearance = Appearance.shared
     @State private var importing = false
+    @State private var searching = false
     @State private var appeared = false
 
     var body: some View {
@@ -38,6 +39,7 @@ struct HomeView: View {
             }
             .libraryDestinations()
             .importer(isPresented: $importing)
+            .searchSheet(isPresented: $searching)
             .onAppear {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true }
             }
@@ -56,6 +58,16 @@ struct HomeView: View {
                     .minimumScaleFactor(0.7)
             }
             Spacer()
+            Button {
+                searching = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color(.tertiarySystemFill)))
+            }
+            .buttonStyle(BounceButtonStyle())
             Button {
                 app.tab = .settings
             } label: {

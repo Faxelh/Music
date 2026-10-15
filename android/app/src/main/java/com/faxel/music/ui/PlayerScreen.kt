@@ -126,6 +126,7 @@ fun PlayerScreen(onClose: () -> Unit) {
     var showSleep by remember { mutableStateOf(false) }
     var showSpeed by remember { mutableStateOf(false) }
     var showLyricsSearch by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
     val (position, duration) = rememberPosition()
 
     LaunchedEffect(song.id) { LyricsStore.load(song, Settings.lyricsAuto.value) }
@@ -143,7 +144,12 @@ fun PlayerScreen(onClose: () -> Unit) {
             val boxH = maxHeight
             val compact = boxH < 680.dp
             Column(Modifier.fillMaxSize().padding(horizontal = 22.dp)) {
-                PlayerHeader(song, onClose, onLyricsSearch = { showLyricsSearch = true })
+                PlayerHeader(
+                    song, onClose,
+                    onLyricsSearch = { showLyricsSearch = true },
+                    onTuning = { showSpeed = true },
+                    onInfo = { showInfo = true },
+                )
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     if (showLyrics) {
                         LiveLyrics(position)
@@ -167,6 +173,7 @@ fun PlayerScreen(onClose: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     VisualizerView(Modifier.fillMaxWidth().height(if (compact) 34.dp else 48.dp))
                 }
+                LoopBadges(onTuning = { showSpeed = true })
                 Scrubber(position, duration)
                 Transport()
                 ToolsRow(
@@ -186,6 +193,7 @@ fun PlayerScreen(onClose: () -> Unit) {
     if (showEq) EqualizerSheet(onDismiss = { showEq = false })
     if (showSleep) SleepSheet(onDismiss = { showSleep = false })
     if (showSpeed) SpeedSheet(onDismiss = { showSpeed = false })
+    if (showInfo) InfoSheet(song, onDismiss = { showInfo = false })
     if (showLyricsSearch) LyricsSearchSheet(song, onDismiss = { showLyricsSearch = false })
 }
 
@@ -292,7 +300,7 @@ private fun PlayerBackground(song: Song) {
 // MARK: En-tête
 
 @Composable
-private fun PlayerHeader(song: Song, onClose: () -> Unit, onLyricsSearch: () -> Unit) {
+private fun PlayerHeader(song: Song, onClose: () -> Unit, onLyricsSearch: () -> Unit, onTuning: () -> Unit, onInfo: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         CircleButton(Icons.Rounded.KeyboardArrowDown, onClose)
@@ -307,6 +315,24 @@ private fun PlayerHeader(song: Song, onClose: () -> Unit, onLyricsSearch: () -> 
         Box {
             CircleButton(Icons.Rounded.MoreVert) { menu = true }
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.radio_song)) }, onClick = { menu = false; PlayerConnection.playRadio(song) })
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(
+                                when {
+                                    PlayerConnection.loopA == null -> R.string.loop_set_a
+                                    PlayerConnection.loopB == null -> R.string.loop_set_b
+                                    else -> R.string.loop_stop
+                                },
+                            ),
+                        )
+                    },
+                    onClick = { menu = false; PlayerConnection.cycleLoop() },
+                )
+                DropdownMenuItem(text = { Text(stringResource(R.string.speed_pitch)) }, onClick = { menu = false; onTuning() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.info)) }, onClick = { menu = false; onInfo() })
+                HorizontalDivider()
                 MenuGroup(stringResource(R.string.cover_style), coverStyles, Settings.coverStyle.value) { Settings.coverStyle.value = it }
                 HorizontalDivider()
                 MenuGroup(stringResource(R.string.background), backgroundStyles, Settings.background.value) { Settings.background.value = it }
@@ -344,6 +370,7 @@ private fun CircleButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 @Composable
 private fun SwipeCover(song: Song, side: Dp) {
     var drag by remember { mutableFloatStateOf(0f) }
+    var burst by remember { mutableStateOf(0) }
     val offset by animateFloatAsState(drag, label = "drag")
     Box(
         Modifier
@@ -356,9 +383,69 @@ private fun SwipeCover(song: Song, side: Dp) {
                     onDragCancel = { drag = 0f },
                 ) { _, amount -> drag += amount }
             }
+            // Double-toucher la pochette : ajoute aux favoris avec un grand cœur.
+            .pointerInput(song.id) {
+                detectTapGestures(onDoubleTap = {
+                    if (!MusicRepository.isFavorite(song)) MusicRepository.toggleFavorite(song)
+                    burst++
+                })
+            }
             .padding(start = (offset.coerceAtLeast(0f) / 3).dp, end = (-offset.coerceAtMost(0f) / 3).dp),
+        contentAlignment = Alignment.Center,
     ) {
         CoverView(song, side)
+        HeartBurst(burst)
+    }
+}
+
+@Composable
+private fun HeartBurst(trigger: Int) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(trigger) {
+        if (trigger == 0) return@LaunchedEffect
+        shown = true
+        delay(650)
+        shown = false
+    }
+    val scale by animateFloatAsState(if (shown) 1f else 0.2f, androidx.compose.animation.core.spring(0.45f, 400f), label = "heart")
+    val alpha by animateFloatAsState(if (shown) 1f else 0f, tween(if (shown) 120 else 300), label = "heartAlpha")
+    if (alpha > 0.01f) {
+        Icon(
+            Icons.Rounded.Favorite, null, tint = Color.White.copy(alpha = alpha),
+            modifier = Modifier.size(110.dp).scale(scale),
+        )
+    }
+}
+
+/** Boucle A–B et tonalité en cours (touchez pour changer). */
+@Composable
+private fun LoopBadges(onTuning: () -> Unit) {
+    val a = PlayerConnection.loopA
+    val b = PlayerConnection.loopB
+    val steps = PlayerConnection.semitones
+    if (a == null && steps == 0) return
+    val primary = MaterialTheme.colorScheme.primary
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+        if (a != null) {
+            Text(
+                "A ${formatTime(a)}  →  B " + (b?.let { formatTime(it) } ?: "?"),
+                color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(primary.copy(alpha = 0.85f))
+                    .clickable { PlayerConnection.cycleLoop() }.padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+            Box(
+                Modifier.size(26.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)).clickable { PlayerConnection.clearLoop() },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.Close, null, tint = Color.White, modifier = Modifier.size(14.dp)) }
+        }
+        if (steps != 0) {
+            Text(
+                stringResource(R.string.pitch) + " " + (if (steps > 0) "+$steps" else "$steps"),
+                color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.18f))
+                    .clickable(onClick = onTuning).padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+        }
     }
 }
 
@@ -517,12 +604,14 @@ private fun ToolsRow(lyricsOn: Boolean, onLyrics: () -> Unit, onQueue: () -> Uni
         IconButton(onClick = onLyrics) { Icon(Icons.Rounded.Subtitles, null, tint = if (lyricsOn) primary else dim) }
         IconButton(onClick = onQueue) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, null, tint = dim) }
         IconButton(onClick = onEq) { Icon(Icons.Rounded.Equalizer, null, tint = if (AudioFx.enabled) primary else dim) }
-        IconButton(onClick = onSleep) { Icon(Icons.Rounded.Timer, null, tint = if (PlayerConnection.sleepEnd != null) primary else dim) }
+        IconButton(onClick = onSleep) {
+            Icon(Icons.Rounded.Timer, null, tint = if (PlayerConnection.sleepEnd != null || PlayerConnection.sleepAtEnd) primary else dim)
+        }
         IconButton(onClick = onSpeed) {
             if (PlayerConnection.speed != 1f) {
                 Text("${PlayerConnection.speed}×", color = primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             } else {
-                Icon(Icons.Rounded.Speed, null, tint = dim)
+                Icon(Icons.Rounded.Speed, null, tint = if (PlayerConnection.semitones != 0) primary else dim)
             }
         }
     }
@@ -661,7 +750,14 @@ private fun SleepSheet(onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().clickable { PlayerConnection.setSleepTimer(minutes); onDismiss() }.padding(vertical = 12.dp),
                 )
             }
-            if (PlayerConnection.sleepEnd != null) {
+            if (PlayerConnection.sleepAtEnd) {
+                Text(stringResource(R.string.sleep_end_on), color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 6.dp))
+            }
+            Text(
+                stringResource(R.string.sleep_end), color = Color.White, fontSize = 17.sp,
+                modifier = Modifier.fillMaxWidth().clickable { PlayerConnection.setSleepTimer(-1); onDismiss() }.padding(vertical = 12.dp),
+            )
+            if (PlayerConnection.sleepEnd != null || PlayerConnection.sleepAtEnd) {
                 Text(
                     stringResource(R.string.sleep_off), color = MaterialTheme.colorScheme.primary, fontSize = 17.sp,
                     modifier = Modifier.fillMaxWidth().clickable { PlayerConnection.setSleepTimer(0); onDismiss() }.padding(vertical = 12.dp),
@@ -676,15 +772,107 @@ private fun SleepSheet(onDismiss: () -> Unit) {
 private fun SpeedSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF16161A)) {
         Column(Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.speed), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { value ->
+            val primary = MaterialTheme.colorScheme.primary
+            Text(stringResource(R.string.speed_pitch), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.speed), color = Color.Gray, fontSize = 13.sp)
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { value ->
+                    val on = PlayerConnection.speed == value
+                    Text(
+                        "$value×".replace(".0×", "×"), color = if (on) Color.White else Color.White.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(50))
+                            .background(if (on) primary else Color.White.copy(alpha = 0.1f))
+                            .clickable { PlayerConnection.setSpeed(value) }.padding(vertical = 8.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(stringResource(R.string.pitch), color = Color.Gray, fontSize = 13.sp)
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val steps = PlayerConnection.semitones
+                TextButton(onClick = { PlayerConnection.changePitch(steps - 1) }, enabled = steps > -6) { Text("−", fontSize = 24.sp) }
                 Text(
-                    (if (PlayerConnection.speed == value) "✓ " else "") + "$value×",
-                    color = if (PlayerConnection.speed == value) MaterialTheme.colorScheme.primary else Color.White, fontSize = 17.sp,
-                    modifier = Modifier.fillMaxWidth().clickable { PlayerConnection.setSpeed(value); onDismiss() }.padding(vertical = 12.dp),
+                    if (steps > 0) "+$steps" else "$steps", color = primary, fontSize = 24.sp, fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center, modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { PlayerConnection.changePitch(steps + 1) }, enabled = steps < 6) { Text("+", fontSize = 24.sp) }
+            }
+            Text(stringResource(R.string.pitch_hint), color = Color.Gray, fontSize = 12.sp)
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TextButton(onClick = { PlayerConnection.cycleLoop() }, modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(
+                            when {
+                                PlayerConnection.loopA == null -> R.string.loop_set_a
+                                PlayerConnection.loopB == null -> R.string.loop_set_b
+                                else -> R.string.loop_stop
+                            },
+                        ),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        PlayerConnection.changePitch(0)
+                        PlayerConnection.setSpeed(1f)
+                        PlayerConnection.clearLoop()
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.reset)) }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+/** Fiche du morceau : album, durée, format, taille, débit, écoutes, emplacement. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InfoSheet(song: Song, onDismiss: () -> Unit) {
+    val size = remember(song.id) { runCatching { java.io.File(song.path).length() }.getOrDefault(0L) }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF16161A)) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Artwork(song, 64.dp, RoundedCornerShape(10.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(song.title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(song.displayArtist, color = Color.Gray, fontSize = 14.sp, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            InfoRow(stringResource(R.string.info_album), song.album)
+            if (song.track > 0) InfoRow(stringResource(R.string.info_track), "${song.track % 1000}")
+            InfoRow(stringResource(R.string.info_duration), formatTime(song.duration))
+            InfoRow(stringResource(R.string.info_format), song.path.substringAfterLast('.', "").uppercase())
+            if (size > 0) {
+                InfoRow(stringResource(R.string.info_size), android.text.format.Formatter.formatShortFileSize(LocalContext.current, size))
+                if (song.duration > 0) InfoRow(stringResource(R.string.info_bitrate), "${size * 8 / song.duration} kbps")
+            }
+            InfoRow(stringResource(R.string.info_plays), "${MusicRepository.playCounts[song.id] ?: 0}")
+            if (song.dateAdded > 0) {
+                InfoRow(
+                    stringResource(R.string.info_added),
+                    java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(song.dateAdded * 1000)),
                 )
             }
+            InfoRow(stringResource(R.string.info_location), song.path.substringBeforeLast('/', ""))
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { PlayerConnection.playRadio(song); onDismiss() }) { Text(stringResource(R.string.radio_song)) }
         }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    if (value.isBlank()) return
+    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+        Text(label, color = Color.Gray, fontSize = 14.sp, modifier = Modifier.width(130.dp))
+        Text(value, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }
 

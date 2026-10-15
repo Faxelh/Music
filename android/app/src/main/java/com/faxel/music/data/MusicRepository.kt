@@ -34,6 +34,9 @@ object MusicRepository {
         private set
     var playCounts by mutableStateOf<Map<Long, Int>>(emptyMap())
         private set
+    /** Millisecondes écoutées par jour (« 2026-10-15 » → ms). */
+    var listenDays by mutableStateOf<Map<String, Long>>(emptyMap())
+        private set
 
     private val byId = HashMap<Long, Song>()
 
@@ -141,6 +144,12 @@ object MusicRepository {
             obj.keys().forEach { key -> key.toLongOrNull()?.let { counts[it] = obj.getInt(key) } }
         }
         playCounts = counts
+        val days = HashMap<String, Long>()
+        runCatching {
+            val obj = JSONObject(p.getString("listen", "{}")!!)
+            obj.keys().forEach { key -> days[key] = obj.getLong(key) }
+        }
+        listenDays = days
         val lists = ArrayList<Playlist>()
         runCatching {
             val array = JSONArray(p.getString("playlists", "[]"))
@@ -165,6 +174,7 @@ object MusicRepository {
             .putString("recent", recent.joinToString(","))
             .putString("counts", counts.toString())
             .putString("playlists", array.toString())
+            .putString("listen", JSONObject().also { obj -> listenDays.forEach { (k, v) -> obj.put(k, v) } }.toString())
             .apply()
     }
 
@@ -179,6 +189,80 @@ object MusicRepository {
         recent = (listOf(id) + recent.filter { it != id }).take(50)
         playCounts = playCounts + (id to ((playCounts[id] ?: 0) + 1))
         save()
+    }
+
+    // MARK: Statistiques et radio
+
+    fun dayKey(millis: Long): String {
+        val c = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+        return String.format(
+            java.util.Locale.US, "%04d-%02d-%02d",
+            c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1, c.get(java.util.Calendar.DAY_OF_MONTH),
+        )
+    }
+
+    fun addListening(ms: Long) {
+        if (ms <= 0) return
+        val key = dayKey(System.currentTimeMillis())
+        var days = listenDays + (key to ((listenDays[key] ?: 0L) + ms))
+        if (days.size > 400) days = days.toSortedMap().entries.toList().takeLast(370).associate { it.key to it.value }
+        listenDays = days
+        save()
+    }
+
+    /** Minutes écoutées sur les `days` derniers jours (du plus ancien à aujourd'hui) : jour → minutes. */
+    fun listeningMinutes(days: Int): List<Pair<Long, Double>> {
+        val today = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 12)
+            set(java.util.Calendar.MINUTE, 0)
+        }.timeInMillis
+        return (days - 1 downTo 0).map { back ->
+            val day = today - back * 86_400_000L
+            day to (listenDays[dayKey(day)] ?: 0L) / 60_000.0
+        }
+    }
+
+    /** Jours d'écoute d'affilée (au moins 1 minute par jour). */
+    val listeningStreak: Int
+        get() {
+            var day = System.currentTimeMillis()
+            if ((listenDays[dayKey(day)] ?: 0L) < 60_000) day -= 86_400_000L
+            var streak = 0
+            while ((listenDays[dayKey(day)] ?: 0L) >= 60_000) {
+                streak++
+                day -= 86_400_000L
+            }
+            return streak
+        }
+
+    /** Radio d'un morceau : même artiste, album, dossier, vos favoris… puis un peu de hasard. */
+    fun radio(seed: Song, count: Int = 60): List<Song> {
+        val scored = songs.filter { it.id != seed.id }.map { song ->
+            var score = Math.random() * 1.2
+            if (seed.hasArtist && song.artist.equals(seed.artist, true)) score += 3
+            if (song.albumId == seed.albumId) score += 1.2
+            if (song.folder == seed.folder) score += 0.8
+            if (song.id in favorites) score += 0.6
+            score += minOf(1.0, (playCounts[song.id] ?: 0) / 10.0)
+            song to score
+        }
+        val picks = scored.sortedByDescending { it.second }.take((count - 1).coerceAtLeast(0)).map { it.first }.shuffled()
+        // Évite deux titres du même artiste à la suite.
+        val pool = picks.toMutableList()
+        val result = mutableListOf(seed)
+        while (pool.isNotEmpty()) {
+            val last = result.last().artist
+            val index = pool.indexOfFirst { it.artist != last }.coerceAtLeast(0)
+            result += pool.removeAt(index)
+        }
+        return result
+    }
+
+    fun createPlaylist(name: String, ids: List<Long>): Playlist {
+        val list = Playlist(UUID.randomUUID().toString(), name.trim().ifBlank { "Playlist" }, ids)
+        playlists = listOf(list) + playlists
+        save()
+        return list
     }
 
     fun createPlaylist(name: String): Playlist {

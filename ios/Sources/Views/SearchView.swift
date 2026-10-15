@@ -7,6 +7,9 @@ struct SearchView: View {
     @EnvironmentObject var player: AudioEngine
     @EnvironmentObject var app: AppState
     @AppStorage("searchQuery") private var query = ""
+    @Environment(\.dismiss) private var dismiss
+    /// Ouverte dans une feuille (depuis Découvrir ou l'Accueil) : bouton Fermer.
+    var inSheet = true
 
     private var text: String { query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
 
@@ -25,6 +28,13 @@ struct SearchView: View {
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: L("Morceaux, artistes, albums"))
             .libraryDestinations()
+            .toolbar {
+                if inSheet {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(L("Fermer")) { dismiss() }
+                    }
+                }
+            }
         }
     }
 

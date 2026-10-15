@@ -79,8 +79,8 @@ struct RootView: View {
                 LibraryView()
                     .tabItem { Label(L("Bibliothèque"), systemImage: "square.stack.fill") }
                     .tag(AppTab.library)
-                SearchView()
-                    .tabItem { Label(L("Rechercher"), systemImage: "magnifyingglass") }
+                ForYouView()
+                    .tabItem { Label(L("Découvrir"), systemImage: "sparkles") }
                     .tag(AppTab.search)
                 SettingsView()
                     .tabItem { Label(L("Réglages"), systemImage: "gearshape.fill") }

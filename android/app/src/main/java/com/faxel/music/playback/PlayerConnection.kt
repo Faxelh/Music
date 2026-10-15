@@ -39,11 +39,58 @@ object PlayerConnection {
         private set
     var sleepEnd by mutableStateOf<Long?>(null)
         private set
+    /** Minuteur « fin du morceau ». */
+    var sleepAtEnd by mutableStateOf(false)
+        private set
+    /** Tonalité en demi-tons (-6…+6), indépendante de la vitesse. */
+    var semitones by mutableStateOf(0)
+        private set
+    /** Boucle A–B (en ms) sur le morceau en cours. */
+    var loopA by mutableStateOf<Long?>(null)
+        private set
+    var loopB by mutableStateOf<Long?>(null)
+        private set
+    private var loopSongId: Long? = null
 
     private val sleepHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val sleepRunnable = Runnable {
-        controller?.pause()
         sleepEnd = null
+        // Le son baisse doucement pendant 6 s avant la pause.
+        val c = controller ?: return@Runnable
+        if (!c.isPlaying) return@Runnable
+        fade(c.volume, 0f, 6000) {
+            controller?.pause()
+            controller?.volume = 1f
+        }
+    }
+
+    /** Relevé régulier pendant la lecture : boucle A–B, fin du morceau, temps d'écoute. */
+    private val tickHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingListen = 0L
+    private val tick = object : Runnable {
+        override fun run() {
+            val c = controller ?: return
+            if (c.isPlaying) {
+                val position = c.currentPosition
+                val duration = c.duration
+                pendingListen += 250
+                if (pendingListen >= 30_000) flushListening()
+                val a = loopA
+                val b = loopB
+                if (a != null && b != null && position >= b) c.seekTo(a)
+                if (sleepAtEnd && duration > 0 && duration - position <= (350 * speed.coerceAtLeast(1f)).toLong()) {
+                    sleepAtEnd = false
+                    c.pause()
+                    if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0)
+                }
+                tickHandler.postDelayed(this, 250)
+            }
+        }
+    }
+
+    private fun flushListening() {
+        if (pendingListen >= 1000) MusicRepository.addListening(pendingListen)
+        pendingListen = 0
     }
 
     private val fadeHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -93,12 +140,29 @@ object PlayerConnection {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // Filet de sécurité du minuteur « fin du morceau » : passage automatique au suivant.
+            if (sleepAtEnd && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                sleepAtEnd = false
+                controller?.pause()
+            }
             mediaItem?.mediaId?.toLongOrNull()?.let { MusicRepository.recordPlay(it) }
+            val id = mediaItem?.mediaId?.toLongOrNull()
+            if (id != loopSongId) {
+                loopSongId = id
+                loopA = null
+                loopB = null
+            }
             saveState()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (!isPlaying) saveState()
+            tickHandler.removeCallbacks(tick)
+            if (isPlaying) {
+                tickHandler.postDelayed(tick, 250)
+            } else {
+                flushListening()
+                saveState()
+            }
         }
     }
 
@@ -177,9 +241,40 @@ object PlayerConnection {
         }
     }
 
+    private fun pitchFactor(steps: Int): Float = Math.pow(2.0, steps / 12.0).toFloat()
+
     @JvmName("updateSpeed")
     fun setSpeed(value: Float) {
-        controller?.playbackParameters = PlaybackParameters(value)
+        controller?.playbackParameters = PlaybackParameters(value, pitchFactor(semitones))
+    }
+
+    /** Monte ou baisse la tonalité (karaoké) sans changer la vitesse. */
+    fun changePitch(steps: Int) {
+        semitones = steps.coerceIn(-6, 6)
+        val c = controller ?: return
+        c.playbackParameters = PlaybackParameters(c.playbackParameters.speed, pitchFactor(semitones))
+    }
+
+    /** Boucle A–B : 1er appui = A, 2e = B, 3e = arrêt. */
+    fun cycleLoop() {
+        val c = controller ?: return
+        val now = c.currentPosition
+        val a = loopA
+        when {
+            a == null -> { loopA = now; loopB = null; loopSongId = currentId }
+            loopB == null -> if (now <= a + 1000) loopA = now else { loopB = now; c.seekTo(a) }
+            else -> clearLoop()
+        }
+    }
+
+    fun clearLoop() {
+        loopA = null
+        loopB = null
+    }
+
+    /** « Radio » d'un morceau : file infinie de titres proches. */
+    fun playRadio(song: Song) {
+        play(MusicRepository.radio(song))
     }
 
     fun playNext(song: Song) {
@@ -212,6 +307,13 @@ object PlayerConnection {
 
     fun setSleepTimer(minutes: Int) {
         sleepHandler.removeCallbacks(sleepRunnable)
+        sleepAtEnd = false
+        if (minutes < 0) {
+            // -1 : pause à la fin du morceau en cours.
+            sleepEnd = null
+            sleepAtEnd = true
+            return
+        }
         if (minutes <= 0) {
             sleepEnd = null
             return

@@ -61,6 +61,8 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var preparing: Set<String> = []
     @Published private(set) var scanning = false
     @Published private(set) var loaded = false
+    /// Secondes écoutées par jour (non publié : mis à jour souvent, lu par « Découvrir »).
+    private(set) var listenDays: [String: Double] = [:]
     /// Change à chaque nouvelle pochette (pour rafraîchir les images).
     @Published private(set) var artworkVersion = 0
 
@@ -146,6 +148,7 @@ final class LibraryStore: ObservableObject {
             playlists = user.playlists
             playCounts = user.playCounts
             lastPlayed = user.lastPlayed
+            listenDays = user.listenDays ?? [:]
             customArtwork = Set(user.customArtwork)
             hidden = Set(user.hidden ?? [])
         }
@@ -663,6 +666,81 @@ final class LibraryStore: ObservableObject {
         saveUser()
     }
 
+    static func dayKey(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    /// Temps d'écoute (envoyé par le lecteur toutes les 30 s et à la pause).
+    func addListening(seconds: Double) {
+        guard seconds > 0 else { return }
+        listenDays[LibraryStore.dayKey(Date()), default: 0] += seconds
+        if listenDays.count > 400 {
+            let keep = Set(listenDays.keys.sorted().suffix(370))
+            listenDays = listenDays.filter { keep.contains($0.key) }
+        }
+        saveUser()
+    }
+
+    /// Minutes écoutées sur les `days` derniers jours (du plus ancien à aujourd'hui).
+    func listeningMinutes(days: Int) -> [(day: Date, minutes: Double)] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return (0..<days).reversed().compactMap { back -> (day: Date, minutes: Double)? in
+            guard let day = calendar.date(byAdding: .day, value: -back, to: today) else { return nil }
+            return (day, (listenDays[LibraryStore.dayKey(day)] ?? 0) / 60)
+        }
+    }
+
+    /// Jours d'écoute d'affilée (aujourd'hui compris s'il y a déjà eu de l'écoute).
+    var listeningStreak: Int {
+        let calendar = Calendar.current
+        var day = calendar.startOfDay(for: Date())
+        if (listenDays[LibraryStore.dayKey(day)] ?? 0) < 60 {
+            day = calendar.date(byAdding: .day, value: -1, to: day) ?? day
+        }
+        var streak = 0
+        while (listenDays[LibraryStore.dayKey(day)] ?? 0) >= 60 {
+            streak += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previous
+        }
+        return streak
+    }
+
+    /// « Radio » d'un morceau : même artiste, genre, album, époque, dossier… puis un peu de hasard.
+    func radio(for seed: Song, count: Int = 60) -> [Song] {
+        let artist = seed.displayArtist.lowercased()
+        let genre = seed.genre?.lowercased()
+        let album = seed.album?.lowercased()
+        let scored: [(Song, Double)] = songs.compactMap { song in
+            guard song.id != seed.id else { return nil }
+            var score = Double.random(in: 0...1.2)
+            if song.displayArtist.lowercased() == artist { score += 3 }
+            if let genre = genre, song.genre?.lowercased() == genre { score += 2 }
+            if let album = album, song.album?.lowercased() == album { score += 1.2 }
+            if let year = seed.year, let other = song.year, abs(year - other) <= 5 { score += 1 }
+            if song.folder == seed.folder { score += 0.6 }
+            if favorites.contains(song.id) { score += 0.6 }
+            score += min(1, Double(playCounts[song.id] ?? 0) / 10)
+            return (song, score)
+        }
+        let picks = scored.sorted { $0.1 > $1.1 }.prefix(max(0, count - 1)).map { $0.0 }
+        return [seed] + spread(Array(picks).shuffled())
+    }
+
+    /// Évite deux titres du même artiste à la suite quand c'est possible.
+    private func spread(_ list: [Song]) -> [Song] {
+        var pool = list
+        var result: [Song] = []
+        while !pool.isEmpty {
+            let last = result.last?.displayArtist
+            let pick = pool.firstIndex { $0.displayArtist != last } ?? 0
+            result.append(pool.remove(at: pick))
+        }
+        return result
+    }
+
     // MARK: - Playlists
 
     @discardableResult
@@ -867,7 +945,7 @@ final class LibraryStore: ObservableObject {
 
     private func saveUser() {
         let user = UserData(hidden: Array(hidden), favorites: Array(favorites), playlists: playlists, playCounts: playCounts,
-                            lastPlayed: lastPlayed, customArtwork: Array(customArtwork))
+                            lastPlayed: lastPlayed, customArtwork: Array(customArtwork), listenDays: listenDays)
         queue.async {
             if let data = try? JSONEncoder().encode(user) {
                 try? data.write(to: LibraryStore.userFile, options: .atomic)

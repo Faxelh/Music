@@ -25,7 +25,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.Button
@@ -73,6 +73,7 @@ sealed class Route {
     data object Favorites : Route()
     data object Recent : Route()
     data object MostPlayed : Route()
+    data object Search : Route()
     data class AlbumDetail(val id: Long) : Route()
     data class ArtistDetail(val name: String) : Route()
     data class PlaylistDetail(val id: String) : Route()
@@ -82,7 +83,8 @@ sealed class Route {
 enum class Tab(val icon: ImageVector, val label: Int) {
     Home(Icons.Rounded.Home, R.string.tab_home),
     Library(Icons.Rounded.LibraryMusic, R.string.tab_library),
-    Search(Icons.Rounded.Search, R.string.tab_search),
+    /** « Découvrir » remplace l'ancien onglet Rechercher (la recherche s'ouvre depuis sa barre). */
+    Discover(Icons.Rounded.AutoAwesome, R.string.tab_discover),
     Settings(Icons.Rounded.Settings, R.string.tab_settings),
 }
 
@@ -183,7 +185,7 @@ fun MusicRoot(granted: Boolean, onAskPermission: () -> Unit) {
                         when (nav.tab) {
                             Tab.Home -> HomeScreen(nav, onOpenPlayer = { playerOpen = true })
                             Tab.Library -> LibraryScreen(nav)
-                            Tab.Search -> SearchScreen(nav)
+                            Tab.Discover -> DiscoverScreen(nav)
                             Tab.Settings -> SettingsScreen()
                         }
                     }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.AlertDialog
@@ -137,6 +138,11 @@ fun SongMenuButton(song: Song, extraMenu: (@Composable (close: () -> Unit) -> Un
             Icon(Icons.Rounded.MoreVert, null, tint = tint)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.radio_song)) },
+                leadingIcon = { Icon(Icons.Rounded.Radio, null) },
+                onClick = { PlayerConnection.playRadio(song); open = false },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.play_next)) },
                 leadingIcon = { Icon(Icons.Rounded.SkipNext, null) },

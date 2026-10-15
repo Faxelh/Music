@@ -171,6 +171,9 @@ struct NowPlayingView: View {
     @State private var dragY: CGFloat = 0
     @State private var showEqualizer = false
     @State private var heartBounce = false
+    @State private var heartBurst = false
+    @State private var showTuning = false
+    @State private var infoSong: Song?
 
     var body: some View {
         GeometryReader { geometry in
@@ -236,6 +239,17 @@ struct NowPlayingView: View {
             EqualizerView()
                 .environmentObject(player)
         }
+        .sheet(isPresented: $showTuning) {
+            PlaybackTuningView()
+                .environmentObject(player)
+                .presentationDetents([.height(430)])
+        }
+        .sheet(item: $infoSong) { song in
+            TrackInfoView(song: song)
+                .environmentObject(player)
+                .environmentObject(library)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     private func updateSpectrum() {
@@ -278,7 +292,30 @@ struct NowPlayingView: View {
                 }
                 Spacer()
                 Menu {
-                    SongMenu(song: song)
+                    Section(L("Lecture")) {
+                        Button {
+                            player.play(library.radio(for: song))
+                            AppState.shared.show(L("Radio : {title}", ["title": song.title]), .ok)
+                        } label: {
+                            Label(L("Radio de ce morceau"), systemImage: "dot.radiowaves.left.and.right")
+                        }
+                        Button {
+                            player.cycleLoop()
+                        } label: {
+                            Label(loopLabel, systemImage: "repeat.circle")
+                        }
+                        Button {
+                            showTuning = true
+                        } label: {
+                            Label(L("Vitesse et tonalité"), systemImage: "dial.medium")
+                        }
+                        Button {
+                            infoSong = song
+                        } label: {
+                            Label(L("Informations"), systemImage: "info.circle")
+                        }
+                    }
+                    SongMenu(song: song, inPlayer: true)
                     Section(L("Pochette")) {
                         Picker(L("Pochette"), selection: $appearance.coverStyle) {
                             ForEach(Appearance.CoverStyle.allCases) { style in
@@ -325,6 +362,16 @@ struct NowPlayingView: View {
                         .id(song.id)
                         .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity),
                                                 removal: .opacity))
+                        .overlay {
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: min(110, cover * 0.4)))
+                                .foregroundColor(.white)
+                                .shadow(color: appearance.accent.opacity(0.9), radius: 24)
+                                .scaleEffect(heartBurst ? 1 : 0.2)
+                                .opacity(heartBurst ? 1 : 0)
+                                .allowsHitTesting(false)
+                        }
+                        .onTapGesture(count: 2) { burstFavorite(song) }
                         .gesture(
                             DragGesture(minimumDistance: 30)
                                 .onEnded { value in
@@ -360,6 +407,23 @@ struct NowPlayingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: song.id)
+    }
+
+    /// Double-toucher la pochette : ajoute aux favoris avec un grand cœur.
+    private func burstFavorite(_ song: Song) {
+        if !library.isFavorite(song) { library.toggleFavorite(song) }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        heartBounce.toggle()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { heartBurst = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+            withAnimation(.easeOut(duration: 0.3)) { heartBurst = false }
+        }
+    }
+
+    private var loopLabel: String {
+        if player.loopA == nil { return L("Boucle A–B : placer A") }
+        if player.loopB == nil { return L("Boucle A–B : placer B") }
+        return L("Arrêter la boucle A–B")
     }
 
     private func smallHeader(_ song: Song) -> some View {
@@ -418,7 +482,49 @@ struct NowPlayingView: View {
     }
 
     private var progressBar: some View {
-        ScrubBar(clock: player.clock) { player.seek(to: $0) }
+        VStack(spacing: 0) {
+            if player.loopA != nil || player.semitones != 0 {
+                HStack(spacing: 8) {
+                    if let a = player.loopA {
+                        Button {
+                            player.cycleLoop()
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "repeat")
+                                Text("A " + Fmt.clock(a) + (player.loopB.map { "  →  B " + Fmt.clock($0) } ?? "  →  B ?"))
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 26)
+                            .background(Capsule().fill(appearance.accent.opacity(0.85)))
+                        }
+                        Button {
+                            player.clearLoop()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(Color.white.opacity(0.18)))
+                        }
+                    }
+                    if player.semitones != 0 {
+                        Button {
+                            showTuning = true
+                        } label: {
+                            Text(L("Tonalité {value}", ["value": String(format: "%+.0f", player.semitones)]))
+                                .padding(.horizontal, 10)
+                                .frame(height: 26)
+                                .background(Capsule().fill(Color.white.opacity(0.18)))
+                        }
+                    }
+                }
+                .font(.system(size: 12, weight: .bold).monospacedDigit())
+                .buttonStyle(BounceButtonStyle())
+                .padding(.top, 8)
+                .transition(.opacity.combined(with: .scale))
+            }
+            ScrubBar(clock: player.clock, loopA: player.loopA, loopB: player.loopB) { player.seek(to: $0) }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: player.loopA)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: player.loopB)
     }
 
     private var controls: some View {
@@ -488,6 +594,11 @@ struct NowPlayingView: View {
             panelButton(.lyrics, icon: "quote.bubble")
             Spacer()
             Menu {
+                if let end = player.sleepEnd {
+                    Text(L("Pause à {time}", ["time": end.formatted(date: .omitted, time: .shortened)]))
+                } else if player.sleepAtEnd {
+                    Text(L("Pause à la fin du morceau"))
+                }
                 ForEach([0, 10, 15, 30, 45, 60, 90], id: \.self) { minutes in
                     Button {
                         player.setSleepTimer(minutes: minutes)
@@ -498,31 +609,29 @@ struct NowPlayingView: View {
                         Text(minutes == 0 ? L("Désactivé") : L("{minutes} min", ["minutes": "\(minutes)"]))
                     }
                 }
+                Button {
+                    player.setSleepTimer(minutes: -1)
+                    AppState.shared.show(L("Pause à la fin du morceau"), .ok)
+                } label: {
+                    Label(L("Fin du morceau"), systemImage: "stop.circle")
+                }
             } label: {
-                Image(systemName: player.sleepEnd == nil ? "moon.zzz" : "moon.zzz.fill")
+                let active = player.sleepEnd != nil || player.sleepAtEnd
+                Image(systemName: active ? "moon.zzz.fill" : "moon.zzz")
                     .font(.system(size: 19))
-                    .foregroundColor(player.sleepEnd == nil ? Color.white.opacity(0.75) : appearance.accent)
+                    .foregroundColor(active ? appearance.accent : Color.white.opacity(0.75))
                     .frame(width: 44, height: 44)
             }
             Spacer()
-            Menu {
-                ForEach([Float(0.5), 0.75, 1, 1.25, 1.5, 2], id: \.self) { value in
-                    Button {
-                        player.setRate(value)
-                    } label: {
-                        if value == player.rate {
-                            Label(Fmt.rate(value), systemImage: "checkmark")
-                        } else {
-                            Text(Fmt.rate(value))
-                        }
-                    }
-                }
+            Button {
+                showTuning = true
             } label: {
                 Text(Fmt.rate(player.rate))
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(player.rate == 1 ? Color.white.opacity(0.75) : appearance.accent)
+                    .foregroundColor(player.rate == 1 && player.semitones == 0 ? Color.white.opacity(0.75) : appearance.accent)
                     .frame(width: 48, height: 44)
             }
+            .buttonStyle(BounceButtonStyle())
             Spacer()
             Button {
                 showEqualizer = true
@@ -713,6 +822,8 @@ struct UpNextView: View {
 /// Barre de progression du lecteur (la seule partie redessinée en continu).
 struct ScrubBar: View {
     @ObservedObject var clock: EngineClock
+    var loopA: Double? = nil
+    var loopB: Double? = nil
     let seek: (Double) -> Void
     @State private var scrubbing = false
     @State private var scrubValue: Double = 0
@@ -726,6 +837,13 @@ struct ScrubBar: View {
                     Capsule().fill(Color.white.opacity(0.25))
                     Capsule().fill(Color.white)
                         .frame(width: geometry.size.width * min(1, max(0, fraction)))
+                    if let a = loopA, clock.duration > 0 {
+                        let start = CGFloat(a / clock.duration) * geometry.size.width
+                        let end = CGFloat((loopB ?? a) / clock.duration) * geometry.size.width
+                        Capsule().fill(Color.accentColor.opacity(0.6))
+                            .frame(width: max(4, end - start))
+                            .offset(x: start)
+                    }
                 }
                 .frame(height: scrubbing ? 12 : 6)
                 .frame(maxHeight: .infinity)
