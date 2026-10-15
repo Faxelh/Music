@@ -181,6 +181,7 @@ object Updater {
 /** Au démarrage : cherche une nouvelle version (une fois par jour) et la propose. */
 @Composable
 fun UpdateCheck() {
+    AppNameAfterUpdate()
     val context = LocalContext.current
     var offered by remember { mutableStateOf<NewVersion?>(null) }
     LaunchedEffect(Unit) {

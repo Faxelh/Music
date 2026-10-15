@@ -32,6 +32,9 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes: [audio]
+        CFBundleURLTypes:
+          - CFBundleURLName: "com.faxel.music"
+            CFBundleURLSchemes: [faxelmusic]
         LSApplicationQueriesSchemes: [shareddocuments]
         NSSpeechRecognitionUsageDescription: "Music écoute le morceau pour générer ses paroles automatiquement."
         NSLocalNetworkUsageDescription: "Music reçoit les musiques envoyées depuis votre ordinateur par Wi-Fi (Transfert Wi-Fi)."

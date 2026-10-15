@@ -145,10 +145,11 @@ fun SettingsScreen() {
             }
         }
         item { Group(stringResource(R.string.upd_section)) }
+        item { com.faxel.music.update.AppNameRow() }
         item { com.faxel.music.update.UpdateSettingsRow() }
         item {
             Text(
-                "Music " + com.faxel.music.update.Updater.currentVersion, color = Color.Gray, fontSize = 13.sp,
+                com.faxel.music.update.AppName.get(androidx.compose.ui.platform.LocalContext.current) + " " + com.faxel.music.update.Updater.currentVersion, color = Color.Gray, fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }

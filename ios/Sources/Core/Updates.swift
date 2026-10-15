@@ -127,6 +127,7 @@ struct UpdatePrompt: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .modifier(AppNameAfterUpdate())
             .task {
                 if let v = await updater.check(), UserDefaults.standard.integer(forKey: "updates.ignored") != v.number {
                     offered = v
