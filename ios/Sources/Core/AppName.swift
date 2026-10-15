@@ -23,13 +23,13 @@ enum AppName {
         UserDefaults.standard.set(clean == defaultName ? "" : clean, forKey: "appName.custom")
     }
 
-    /// Vrai une seule fois, au premier lancement d'une nouvelle version.
-    static func justUpdated() -> Bool {
+    /// Au premier lancement d'une nouvelle version : le numéro de la version d'avant (sinon nil).
+    static func justUpdated() -> Int? {
         let defaults = UserDefaults.standard
         let last = defaults.integer(forKey: "appName.build")
         let now = Updater.shared.currentBuild
         if last != now { defaults.set(now, forKey: "appName.build") }
-        return last > 0 && last < now
+        return last > 0 && last < now ? last : nil
     }
 
     /// Icône de l'app (pour l'aperçu et l'icône de l'écran d'accueil).
@@ -274,30 +274,27 @@ struct AppNameView: View {
     }
 }
 
-/// Après une mise à jour : « Voulez-vous changer le nom de l'application ? »
+/// Après une mise à jour : la liste des nouveautés et correctifs, et la proposition
+/// de changer le nom de l'application.
 struct AppNameAfterUpdate: ViewModifier {
-    @State private var ask = false
-    @State private var editing = false
+    @State private var news: [ChangeEntry]?
 
     func body(content: Content) -> some View {
         content
-            .background(
-                Color.clear
-                    .alert(L("Mise à jour installée"), isPresented: $ask) {
-                        Button(L("Changer le nom")) { editing = true }
-                        Button(L("Garder « {name} »", ["name": AppName.current]), role: .cancel) {}
-                    } message: {
-                        Text(L("Voulez-vous changer le nom de l'application ?"))
-                    }
-            )
-            .sheet(isPresented: $editing) {
-                NavigationStack { AppNameView(inSheet: true) }
+            .sheet(item: Binding(get: { news.map { WhatsNew(entries: $0) } }, set: { if $0 == nil { news = nil } })) { item in
+                WhatsNewView(entries: item.entries)
             }
             .task {
-                if AppName.justUpdated() {
-                    try? await Task.sleep(nanoseconds: 800_000_000)
-                    ask = true
-                }
+                guard let previous = AppName.justUpdated() else { return }
+                var entries = Changelog.since(build: previous, in: Changelog.bundled)
+                if entries.isEmpty { entries = Array(Changelog.bundled.prefix(1)) }
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                news = entries
             }
     }
+}
+
+private struct WhatsNew: Identifiable {
+    let entries: [ChangeEntry]
+    var id: String { entries.map { $0.id }.joined() }
 }

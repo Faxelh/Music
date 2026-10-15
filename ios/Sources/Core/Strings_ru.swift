@@ -365,4 +365,13 @@ let RU: [String: String] = [
     "Changer le nom": "Изменить имя",
     "Garder « {name} »": "Оставить «{name}»",
     "Voulez-vous changer le nom de l'application ?": "Хотите изменить название приложения?",
+    "… et {count} autre(s)": "… и ещё {count}",
+    "Pas encore installé : disponible dans la prochaine mise à jour.": "Ещё не установлено: появится в следующем обновлении.",
+    "Aucun historique pour le moment.": "Истории пока нет.",
+    "Historique des nouveautés": "История изменений",
+    "Changer le nom de l'application": "Изменить название приложения",
+    "Nom actuel : {name}": "Текущее имя: {name}",
+    "Continuer": "Продолжить",
+    "Nouveautés et correctifs :": "Новое и исправления:",
+    "Toutes les nouveautés et tous les correctifs, de la plus récente à la plus ancienne.": "Все новинки и исправления, от новых к старым.",
 ]

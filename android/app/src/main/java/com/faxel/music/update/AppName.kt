@@ -79,13 +79,13 @@ object AppName {
         return try { ShortcutManagerCompat.requestPinShortcut(context, info, null) } catch (e: Exception) { false }
     }
 
-    /** Vrai une seule fois après l'installation d'une nouvelle version. */
-    fun justUpdated(context: Context): Boolean {
+    /** Au premier lancement d'une nouvelle version : le numéro de la version d'avant (sinon null). */
+    fun justUpdated(context: Context): Int? {
         val p = prefs(context)
         val last = p.getInt("build", 0)
         val now = Updater.currentBuild
         if (last != now) p.edit().putInt("build", now).apply()
-        return last in 1 until now
+        return if (last in 1 until now) last else null
     }
 }
 
@@ -107,21 +107,19 @@ fun AppNameRow() {
     if (open) AppNameDialog(onDismiss = { open = false; current = AppName.get(context) })
 }
 
-/** Après une mise à jour : propose de changer le nom de l'app. */
+/** Après une mise à jour : nouveautés et correctifs, puis proposition de changer le nom de l'app. */
 @Composable
 fun AppNameAfterUpdate() {
     val context = LocalContext.current
-    var ask by remember { mutableStateOf(false) }
+    var news by remember { mutableStateOf<List<ChangeEntry>?>(null) }
     var editing by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { ask = AppName.justUpdated(context) }
-    if (ask) {
-        AlertDialog(
-            onDismissRequest = { ask = false },
-            title = { Text(stringResource(R.string.appname_updated_title)) },
-            text = { Text(stringResource(R.string.appname_updated_text, AppName.get(context))) },
-            confirmButton = { TextButton(onClick = { ask = false; editing = true }) { Text(stringResource(R.string.appname_change)) } },
-            dismissButton = { TextButton(onClick = { ask = false }) { Text(stringResource(R.string.appname_keep)) } },
-        )
+    LaunchedEffect(Unit) {
+        val previous = AppName.justUpdated(context) ?: return@LaunchedEffect
+        val all = Changelog.bundled(context)
+        news = Changelog.since(previous, all).ifEmpty { all.take(1) }
+    }
+    news?.let { entries ->
+        WhatsNewDialog(entries, onRename = { news = null; editing = true }, onDismiss = { news = null })
     }
     if (editing) AppNameDialog(onDismiss = { editing = false })
 }

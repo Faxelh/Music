@@ -162,6 +162,13 @@
     <string name="appname_change">Namen ändern</string>
     <string name="appname_keep">Behalten</string>
     <string name="appname_reset">Ursprünglicher Name</string>
+    <string name="changelog_title">Neuigkeiten-Verlauf</string>
+    <string name="changelog_sub">Alles Neue und Korrigierte</string>
+    <string name="changelog_close">Schließen</string>
+    <string name="changelog_upcoming">Noch nicht installiert: im nächsten Update</string>
+    <string name="changelog_empty">Noch kein Verlauf</string>
+    <string name="changelog_continue">Weiter</string>
+    <string name="changelog_fixes">Neuerungen und Korrekturen:</string>
     <plurals name="songs_count">
         <item quantity="one">%d Titel</item>
         <item quantity="other">%d Titel</item>

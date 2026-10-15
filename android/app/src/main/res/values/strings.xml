@@ -164,6 +164,13 @@
     <string name="appname_change">Changer le nom</string>
     <string name="appname_keep">Garder</string>
     <string name="appname_reset">Nom d\'origine</string>
+    <string name="changelog_title">Historique des nouveautés</string>
+    <string name="changelog_sub">Tout ce qui a été ajouté et corrigé</string>
+    <string name="changelog_close">Fermer</string>
+    <string name="changelog_upcoming">Pas encore installé : disponible dans la prochaine mise à jour</string>
+    <string name="changelog_empty">Aucun historique pour le moment</string>
+    <string name="changelog_continue">Continuer</string>
+    <string name="changelog_fixes">Nouveautés et correctifs :</string>
     <plurals name="songs_count">
         <item quantity="one">%d morceau</item>
         <item quantity="other">%d morceaux</item>

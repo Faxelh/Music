@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -200,15 +201,22 @@ fun UpdateCheck() {
 fun UpdateDialog(version: NewVersion, close: (ignore: Boolean) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var news by remember { mutableStateOf<List<ChangeEntry>>(emptyList()) }
+    LaunchedEffect(version.number) { news = Changelog.since(Updater.currentBuild, Changelog.remote()) }
     AlertDialog(
         onDismissRequest = { if (!Updater.downloading) close(false) },
         title = { Text(stringResource(R.string.upd_title)) },
         text = {
             Column {
                 Text(stringResource(R.string.upd_text, version.version, Updater.currentVersion))
-                if (version.notes.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(version.notes.take(400), color = Color.Gray, fontSize = 13.sp)
+                val lines = news.flatMap { it.lines }
+                if (lines.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(stringResource(R.string.changelog_fixes), fontSize = 14.sp)
+                    Spacer(Modifier.height(4.dp))
+                    androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 260.dp)) {
+                        lines.forEach { line -> item { Text("• $line", color = Color.Gray, fontSize = 13.sp) } }
+                    }
                 }
                 if (Updater.downloading) {
                     Spacer(Modifier.height(12.dp))

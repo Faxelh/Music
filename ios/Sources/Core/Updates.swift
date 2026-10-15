@@ -28,6 +28,8 @@ final class Updater: ObservableObject {
     @Published private(set) var downloading = false
     @Published private(set) var ipaFile: URL?
     @Published private(set) var downloadFailed = false
+    /// Nouveautés et correctifs de la version disponible (HISTORIQUE.json en ligne).
+    @Published private(set) var news: [ChangeEntry] = []
 
     var currentBuild: Int {
         Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
@@ -71,6 +73,7 @@ final class Updater: ObservableObject {
             }
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: key)
             available = best.flatMap { $0.number > currentBuild ? $0 : nil }
+            news = available == nil ? [] : Changelog.since(build: currentBuild, in: await Changelog.remote())
             return available
         } catch {
             failed = true
@@ -144,8 +147,10 @@ struct UpdatePrompt: ViewModifier {
                     UserDefaults.standard.set(v.number, forKey: "updates.ignored")
                 }
             } message: { v in
+                let notes = Changelog.summary(updater.news)
                 Text(L("{app} {new} est disponible (vous avez la {old}).",
-                       ["app": Updater.appName, "new": v.version, "old": updater.currentVersion]))
+                       ["app": AppName.current, "new": v.version, "old": updater.currentVersion])
+                     + (notes.isEmpty ? "" : "\n\n" + L("Nouveautés et correctifs :") + "\n" + notes))
             }
             .sheet(isPresented: $sheet) {
                 NavigationStack {
@@ -187,8 +192,10 @@ struct UpdatesView: View {
                 }
                 if let v = updater.available {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(L("{app} {new} est disponible", ["app": Updater.appName, "new": v.version])).font(.headline)
-                        if !v.notes.isEmpty { Text(v.notes).font(.caption).foregroundColor(.secondary) }
+                        Text(L("{app} {new} est disponible", ["app": AppName.current, "new": v.version])).font(.headline)
+                        ForEach(updater.news.flatMap { $0.lines }, id: \.self) { line in
+                            Text("• " + line).font(.caption).foregroundColor(.secondary)
+                        }
                     }
                     Button { updater.openInSideStore() } label: {
                         Label(L("Mettre à jour avec SideStore"), systemImage: "arrow.down.app")
@@ -216,6 +223,13 @@ struct UpdatesView: View {
                     Label(updater.failed ? L("Vérification impossible. Vérifiez la connexion.") : L("L'app est à jour."),
                           systemImage: updater.failed ? "wifi.exclamationmark" : "checkmark.circle")
                         .foregroundColor(updater.failed ? .orange : .green)
+                }
+            }
+            Section {
+                NavigationLink {
+                    ChangelogView()
+                } label: {
+                    Label(L("Historique des nouveautés"), systemImage: "clock.arrow.circlepath")
                 }
             }
             Section {

@@ -365,4 +365,13 @@ let DE: [String: String] = [
     "Changer le nom": "Namen ändern",
     "Garder « {name} »": "„{name}“ behalten",
     "Voulez-vous changer le nom de l'application ?": "Möchtest du den App-Namen ändern?",
+    "… et {count} autre(s)": "… und {count} weitere",
+    "Pas encore installé : disponible dans la prochaine mise à jour.": "Noch nicht installiert: im nächsten Update verfügbar.",
+    "Aucun historique pour le moment.": "Noch kein Verlauf.",
+    "Historique des nouveautés": "Neuigkeiten-Verlauf",
+    "Changer le nom de l'application": "App-Namen ändern",
+    "Nom actuel : {name}": "Aktueller Name: {name}",
+    "Continuer": "Weiter",
+    "Nouveautés et correctifs :": "Neuerungen und Korrekturen:",
+    "Toutes les nouveautés et tous les correctifs, de la plus récente à la plus ancienne.": "Alle Neuerungen und Korrekturen, die neuesten zuerst.",
 ]

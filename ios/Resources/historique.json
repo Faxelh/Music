@@ -1,0 +1,152 @@
+[
+ {
+  "date": "2026-10-15T13:05:00Z",
+  "titre": "Nouveautés visibles",
+  "items": [
+   {
+    "texte": "Historique des nouveautés dans Réglages, et liste des correctifs affichée à chaque mise à jour"
+   },
+   {
+    "texte": "Numéro de version automatique : Année.Mois.N (ex. 2026.10.3 = 3e mise à jour d'octobre 2026)"
+   }
+  ]
+ },
+ {
+  "date": "2026-10-15T12:30:00Z",
+  "titre": "Nom de l'application",
+  "items": [
+   {
+    "texte": "Le nom de l'application se change dans Réglages › Nom de l'application, et il est proposé après chaque mise à jour"
+   },
+   {
+    "texte": "Icône à votre nom sur l'écran d'accueil (profil à installer depuis Réglages)",
+    "plateforme": "ios"
+   },
+   {
+    "texte": "Icône à votre nom ajoutée sur l'écran d'accueil",
+    "plateforme": "android"
+   },
+   {
+    "texte": "Minuteur « fin du morceau » plus fiable",
+    "plateforme": "android"
+   }
+  ]
+ },
+ {
+  "date": "2026-10-15T11:30:00Z",
+  "titre": "Découvrir et lecteur enrichi",
+  "items": [
+   {
+    "texte": "Nouvel onglet Découvrir à la place de Rechercher : mix automatiques (favoris, en boucle, nouveautés, à redécouvrir, jamais écoutés, express, grand format)"
+   },
+   {
+    "texte": "Radios sans fin autour d'un titre, artiste du jour, album à réécouter, décennies et genres"
+   },
+   {
+    "texte": "Statistiques d'écoute : minutes de la semaine, écoutes, jours d'affilée, artiste et titre n°1"
+   },
+   {
+    "texte": "La recherche s'ouvre depuis Découvrir et depuis l'Accueil"
+   },
+   {
+    "texte": "Lecteur : double-toucher la pochette pour l'ajouter aux favoris"
+   },
+   {
+    "texte": "Lecteur : vitesse et tonalité (−6 à +6 demi-tons, idéal pour chanter)"
+   },
+   {
+    "texte": "Lecteur : boucle A–B pour répéter un passage"
+   },
+   {
+    "texte": "Lecteur : radio de ce morceau et fiche d'informations (format, qualité, écoutes…)"
+   },
+   {
+    "texte": "Minuteur « fin du morceau » et baisse douce du son avant la pause"
+   },
+   {
+    "texte": "Correction d'une erreur de compilation de l'onglet Découvrir",
+    "plateforme": "ios"
+   }
+  ]
+ },
+ {
+  "date": "2026-10-14T12:00:00Z",
+  "titre": "Plus fluide et plus rapide",
+  "items": [
+   {
+    "texte": "Optimisation générale : défilement et ouverture des écrans plus rapides"
+   },
+   {
+    "texte": "Lecteur audio amélioré : fondu doux à la pause et à la reprise"
+   },
+   {
+    "texte": "Albums et artistes calculés en arrière-plan",
+    "plateforme": "android"
+   },
+   {
+    "texte": "Correction de la pochette dans le lecteur sur tablette",
+    "plateforme": "android"
+   }
+  ]
+ },
+ {
+  "date": "2026-10-13T12:00:00Z",
+  "titre": "Lecture corrigée",
+  "items": [
+   {
+    "texte": "Plus de retour au début après une pause",
+    "plateforme": "ios"
+   },
+   {
+    "texte": "Plus de saut de morceau quand iOS coupe le son",
+    "plateforme": "ios"
+   },
+   {
+    "texte": "Reprise depuis l'écran verrouillé corrigée",
+    "plateforme": "ios"
+   },
+   {
+    "texte": "Plus de ralentissement entre pause et lecture",
+    "plateforme": "ios"
+   },
+   {
+    "texte": "Journal du lecteur (Réglages) pour diagnostiquer un problème",
+    "plateforme": "ios"
+   }
+  ]
+ },
+ {
+  "date": "2026-10-11T12:00:00Z",
+  "titre": "Mises à jour intégrées",
+  "items": [
+   {
+    "texte": "Un seul dépôt pour iPhone et Android"
+   },
+   {
+    "texte": "L'app vérifie les nouvelles versions et propose la mise à jour"
+   },
+   {
+    "texte": "Mise à jour avec SideStore / AltStore ou IPA pour Sideloadly",
+    "plateforme": "ios"
+   },
+   {
+    "texte": "Téléchargement et installation de l'APK depuis l'app",
+    "plateforme": "android"
+   }
+  ]
+ },
+ {
+  "date": "2026-10-10T12:00:00Z",
+  "titre": "Music sur Android",
+  "items": [
+   {
+    "texte": "Première version Android : bibliothèque, lecteur, égaliseur, paroles, playlists",
+    "plateforme": "android"
+   },
+   {
+    "texte": "Compatible téléphones et tablettes",
+    "plateforme": "android"
+   }
+  ]
+ }
+]

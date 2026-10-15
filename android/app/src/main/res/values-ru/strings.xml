@@ -162,6 +162,13 @@
     <string name="appname_change">Изменить имя</string>
     <string name="appname_keep">Оставить</string>
     <string name="appname_reset">Исходное имя</string>
+    <string name="changelog_title">История изменений</string>
+    <string name="changelog_sub">Всё добавленное и исправленное</string>
+    <string name="changelog_close">Закрыть</string>
+    <string name="changelog_upcoming">Ещё не установлено: в следующем обновлении</string>
+    <string name="changelog_empty">Истории пока нет</string>
+    <string name="changelog_continue">Продолжить</string>
+    <string name="changelog_fixes">Новое и исправления:</string>
     <plurals name="songs_count">
         <item quantity="one">%d трек</item>
         <item quantity="few">%d трека</item>

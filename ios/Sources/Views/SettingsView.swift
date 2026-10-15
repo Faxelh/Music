@@ -198,6 +198,11 @@ struct SettingsView: View {
                 Slider(value: $appearance.backgroundDim, in: 0...0.8)
             }
             NavigationLink {
+                ChangelogView()
+            } label: {
+                SettingsLabel(title: L("Historique des nouveautés"), icon: "clock.arrow.circlepath", color: .teal)
+            }
+            NavigationLink {
                 AppNameView()
             } label: {
                 SettingsLabel(title: L("Nom de l'application"), icon: "character.cursor.ibeam", color: .purple)

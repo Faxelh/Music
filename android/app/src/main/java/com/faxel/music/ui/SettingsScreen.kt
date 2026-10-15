@@ -145,6 +145,7 @@ fun SettingsScreen() {
             }
         }
         item { Group(stringResource(R.string.upd_section)) }
+        item { com.faxel.music.update.ChangelogRow() }
         item { com.faxel.music.update.AppNameRow() }
         item { com.faxel.music.update.UpdateSettingsRow() }
         item {
