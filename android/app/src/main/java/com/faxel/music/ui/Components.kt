@@ -2,6 +2,7 @@ package com.faxel.music.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,6 +88,7 @@ fun Artwork(song: Song?, size: Dp, shape: Shape = RoundedCornerShape(8.dp), modi
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(
     song: Song,
@@ -94,15 +96,32 @@ fun SongRow(
     modifier: Modifier = Modifier,
     number: Int? = null,
     extraMenu: (@Composable (close: () -> Unit) -> Unit)? = null,
+    /** Liste où l'on peut sélectionner plusieurs morceaux (appui long). */
+    selectable: Boolean = false,
 ) {
     val playing = PlayerConnection.currentId == song.id
+    val selection = SongSelection.state
+    val selecting = selectable && selection.active
     Row(
         modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .then(
+                if (selectable) {
+                    Modifier.combinedClickable(
+                        onClick = { if (selection.active) selection.toggle(song.key) else onClick() },
+                        onLongClick = { if (selection.active) selection.toggle(song.key) else selection.start(song.key) },
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (selecting) {
+            SelectionCheck(selection.isSelected(song.key))
+            Spacer(Modifier.width(12.dp))
+        }
         if (number != null) {
             Text("$number", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.width(26.dp))
         } else {

@@ -247,6 +247,7 @@ struct SongListView: View {
     @AppStorage("songsSort") private var sort = "title"
     let kind: Kind
     @State private var query = ""
+    @StateObject private var selection = SelectionModel()
 
     private var title: String {
         switch kind {
@@ -302,8 +303,13 @@ struct SongListView: View {
                 PlayShuffleButtons(songs: list)
                     .listRowSeparator(.hidden)
                 ForEach(Array(list.enumerated()), id: \.element.id) { index, song in
-                    SongRow(song: song, number: kind == .mostPlayed ? index + 1 : nil) {
-                        player.play(list, start: index)
+                    HStack(spacing: 10) {
+                        if selection.active {
+                            SelectionCheck(selected: selection.ids.contains(song.id))
+                        }
+                        SongRow(song: song, number: kind == .mostPlayed ? index + 1 : nil) {
+                            if selection.active { selection.toggle(song.id) } else { player.play(list, start: index) }
+                        }
                     }
                     .swipeActions(edge: .leading) {
                         Button {
@@ -327,7 +333,13 @@ struct SongListView: View {
         .listStyle(.plain)
         .navigationTitle(title)
         .searchable(text: $query, prompt: L("Rechercher"))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selection.active { SelectionBar(selection: selection, all: list) }
+        }
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                SelectButton(selection: selection)
+            }
             if kind != .mostPlayed {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {

@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
@@ -347,9 +348,11 @@ private fun AllSongsPage(nav: Navigator) {
             else -> all
         }
     }
+    SongSelectionHost(songs) {
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             PageHeader(stringResource(R.string.songs), nav) {
+                SelectToggle()
                 Box {
                     IconButton(onClick = { sortOpen = true }) { Icon(Icons.Rounded.Sort, null, tint = MaterialTheme.colorScheme.primary) }
                     DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }) {
@@ -366,27 +369,51 @@ private fun AllSongsPage(nav: Navigator) {
         }
         item { PlayShuffleRow(songs) }
         itemsIndexed(songs, key = { _, s -> s.id }) { index, song ->
-            SongRow(song, onClick = { PlayerConnection.play(songs, index) })
+            SongRow(song, onClick = { PlayerConnection.play(songs, index) }, selectable = true)
         }
+        item { SelectionSpacer() }
+    }
     }
 }
 
 @Composable
 private fun SongListPage(title: String, songs: List<Song>, nav: Navigator) {
+    SongSelectionHost(songs) {
     LazyColumn(Modifier.fillMaxSize()) {
-        item { PageHeader(title, nav) }
+        item { PageHeader(title, nav) { if (songs.isNotEmpty()) SelectToggle() } }
         if (songs.isEmpty()) item { EmptyState(stringResource(R.string.nothing_here)) }
         item { PlayShuffleRow(songs) }
         itemsIndexed(songs, key = { _, s -> s.id }) { index, song ->
-            SongRow(song, onClick = { PlayerConnection.play(songs, index) })
+            SongRow(song, onClick = { PlayerConnection.play(songs, index) }, selectable = true)
         }
+        item { SelectionSpacer() }
     }
+    }
+}
+
+/** Bouton « Sélectionner » / fermer la sélection. */
+@Composable
+private fun SelectToggle() {
+    val selection = SongSelection.state
+    IconButton(onClick = { if (selection.active) selection.finish() else selection.start() }) {
+        Icon(
+            if (selection.active) Icons.Rounded.Close else Icons.Rounded.Checklist, null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+/** Place pour la barre de sélection en bas de la liste. */
+@Composable
+private fun SelectionSpacer() {
+    if (SongSelection.state.active) Spacer(Modifier.height(150.dp))
 }
 
 @Composable
 private fun CollectionPage(title: String, subtitle: String, songs: List<Song>, nav: Navigator, numbered: Boolean = false) {
+    SongSelectionHost(songs) {
     LazyColumn(Modifier.fillMaxSize()) {
-        item { PageHeader("", nav) }
+        item { PageHeader("", nav) { SelectToggle() } }
         item {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Artwork(songs.firstOrNull(), 220.dp, RoundedCornerShape(16.dp))
@@ -399,16 +426,19 @@ private fun CollectionPage(title: String, subtitle: String, songs: List<Song>, n
         }
         item { PlayShuffleRow(songs) }
         itemsIndexed(songs, key = { _, s -> s.id }) { index, song ->
-            SongRow(song, onClick = { PlayerConnection.play(songs, index) }, number = if (numbered) index + 1 else null)
+            SongRow(song, onClick = { PlayerConnection.play(songs, index) }, number = if (numbered) index + 1 else null, selectable = true)
         }
+        item { SelectionSpacer() }
+    }
     }
 }
 
 @Composable
 private fun ArtistPage(name: String, songs: List<Song>, nav: Navigator) {
     val albums = MusicRepository.albums.filter { album -> album.songs.any { it.artist == name } }
+    SongSelectionHost(songs) {
     LazyColumn(Modifier.fillMaxSize()) {
-        item { PageHeader(name, nav) }
+        item { PageHeader(name, nav) { SelectToggle() } }
         item { PlayShuffleRow(songs) }
         if (albums.isNotEmpty()) {
             item { SectionTitle(stringResource(R.string.albums)) }
@@ -420,8 +450,10 @@ private fun ArtistPage(name: String, songs: List<Song>, nav: Navigator) {
         }
         item { SectionTitle(stringResource(R.string.songs)) }
         itemsIndexed(songs, key = { _, s -> s.id }) { index, song ->
-            SongRow(song, onClick = { PlayerConnection.play(songs, index) })
+            SongRow(song, onClick = { PlayerConnection.play(songs, index) }, selectable = true)
         }
+        item { SelectionSpacer() }
+    }
     }
 }
 

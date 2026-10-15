@@ -881,6 +881,43 @@ final class LibraryStore: ObservableObject {
     /// playlists, paroles, pochettes, file de lecture — partout dans Music.
     func delete(_ song: Song, everywhere: Bool = false) {
         let targets = [song] + (everywhere ? duplicates(of: song) : [])
+        let (removed, failed) = erase(targets)
+        guard removed > 0 else {
+            AppState.shared.show(L("Le fichier n'a pas pu être supprimé."), .error)
+            return
+        }
+        if failed > 0 {
+            AppState.shared.show(L("{count} copie(s) n'ont pas pu être supprimées.", ["count": "\(failed)"]), .warn)
+        } else if removed > 1 {
+            AppState.shared.show(L("Supprimé partout ({count} copies).", ["count": "\(removed)"]), .info)
+        } else {
+            AppState.shared.show(song.isIpod ? L("Retiré de la bibliothèque de Music.") : L("Supprimé."), .info)
+        }
+    }
+
+    /// Sélection : plusieurs morceaux supprimés d'un coup.
+    func deleteMany(_ list: [Song]) {
+        guard !list.isEmpty else { return }
+        let (removed, failed) = erase(list)
+        if failed > 0 {
+            AppState.shared.show(L("{count} fichier(s) n'ont pas pu être supprimés.", ["count": "\(failed)"]), .warn)
+        } else {
+            AppState.shared.show(L("{count} élément(s) supprimé(s).", ["count": "\(removed)"]), .info)
+        }
+    }
+
+    /// Sélection : tous en favoris (ou tous retirés si tous l'étaient déjà).
+    func setFavorites(_ list: [Song]) {
+        let allFavorite = list.allSatisfy { favorites.contains($0.id) }
+        for song in list {
+            if allFavorite { favorites.remove(song.id) } else { favorites.insert(song.id) }
+        }
+        saveUser()
+        AppState.shared.show(allFavorite ? L("Retirés des favoris.") : L("Ajoutés aux favoris."), .ok)
+    }
+
+    /// Efface les fichiers (ou retire les morceaux de l'iPhone) : (supprimés, échecs).
+    private func erase(_ targets: [Song]) -> (Int, Int) {
         var removed: [Song] = []
         var failed = 0
         for item in targets {
@@ -896,10 +933,7 @@ final class LibraryStore: ObservableObject {
                 failed += 1
             }
         }
-        guard !removed.isEmpty else {
-            AppState.shared.show(L("Le fichier n'a pas pu être supprimé."), .error)
-            return
-        }
+        guard !removed.isEmpty else { return (0, failed) }
         for item in removed {
             AudioEngine.shared.forget(item)
             for url in [LibraryStore.lyricsFolder.appendingPathComponent(item.key + ".lrc"),
@@ -922,13 +956,7 @@ final class LibraryStore: ObservableObject {
                 try? data.write(to: LibraryStore.songsCache, options: .atomic)
             }
         }
-        if failed > 0 {
-            AppState.shared.show(L("{count} copie(s) n'ont pas pu être supprimées.", ["count": "\(failed)"]), .warn)
-        } else if removed.count > 1 {
-            AppState.shared.show(L("Supprimé partout ({count} copies).", ["count": "\(removed.count)"]), .info)
-        } else {
-            AppState.shared.show(song.isIpod ? L("Retiré de la bibliothèque de Music.") : L("Supprimé."), .info)
-        }
+        return (removed.count, failed)
     }
 
     /// Retire les références aux fichiers disparus.

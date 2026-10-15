@@ -147,10 +147,11 @@ struct UpdatePrompt: ViewModifier {
                     UserDefaults.standard.set(v.number, forKey: "updates.ignored")
                 }
             } message: { v in
-                let notes = Changelog.summary(updater.news)
-                Text(L("{app} {new} est disponible (vous avez la {old}).",
-                       ["app": AppName.current, "new": v.version, "old": updater.currentVersion])
-                     + (notes.isEmpty ? "" : "\n\n" + L("Nouveautés et correctifs :") + "\n" + notes))
+                let notes: String = Changelog.summary(updater.news)
+                let intro: String = L("{app} {new} est disponible (vous avez la {old}).",
+                                      ["app": AppName.current, "new": v.version, "old": updater.currentVersion])
+                let extra: String = notes.isEmpty ? "" : "\n\n" + L("Nouveautés et correctifs :") + "\n" + notes
+                Text(intro + extra)
             }
             .sheet(isPresented: $sheet) {
                 NavigationStack {

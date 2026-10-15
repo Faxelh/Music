@@ -1,5 +1,17 @@
 [
  {
+  "date": "2026-10-15T17:30:00Z",
+  "titre": "Sélection multiple",
+  "items": [
+   {
+    "texte": "Listes de morceaux : bouton Sélectionner (ou appui long) pour choisir un ou plusieurs sons, ou tout sélectionner"
+   },
+   {
+    "texte": "Exporter vers Fichiers / un dossier, partager, ajouter à une playlist, à la file ou aux favoris, supprimer d'un coup"
+   }
+  ]
+ },
+ {
   "date": "2026-10-15T13:05:00Z",
   "titre": "Nouveautés visibles",
   "items": [
