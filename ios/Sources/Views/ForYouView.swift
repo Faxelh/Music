@@ -469,7 +469,7 @@ struct ForYouView: View {
                     if let song = data.topSong {
                         Button {
                             if let index = library.mostPlayed.firstIndex(where: { $0.id == song.id }) {
-                                play(library.mostPlayed, start: index)
+                                play(library.mostPlayed, start: index, shuffled: false)
                             }
                         } label: {
                             HStack {
