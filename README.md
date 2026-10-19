@@ -67,7 +67,7 @@ Allez dans **Réglages** de l'application : le numéro de version s'affiche (par
 
 ## 🔄 Mises à jour
 
-Après la première installation, l'application vérifie elle-même les nouvelles versions et vous propose de se mettre à jour :
+Après la première installation, l'application vérifie elle-même les nouvelles versions et vous propose de mettre à jour :
 
 - **Android** : l'APK se télécharge et s'installe depuis l'application.
 - **iPhone** : mise à jour via SideStore / AltStore, ou en réinstallant le nouvel IPA avec Sideloadly.
